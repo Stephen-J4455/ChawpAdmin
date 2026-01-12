@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "ChawpAdmin",
+    "slug": "ChawpAdmin",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/chawp.png",
+    "userInterfaceStyle": "dark",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "splash": {
+      "image": "./assets/chawp.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#000000"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "plugins": [
+      "expo-system-ui",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "35.0.0"
+          }
+        }
+      ],
+      "expo-font"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sj.chawpadmin"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/chawp.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.sj.chawpadmin",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/chawp.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f6bd2190-4d5f-4232-b412-bf4728e04172"
+      }
+    }
+  }
+}
