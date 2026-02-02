@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Dimensions, ScrollView } from "react-native";
 import Svg, {
   Rect,
   Line,
@@ -15,162 +15,255 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 export function BarChart({ data, title, height = 200 }) {
   if (!data || data.length === 0) return null;
 
-  const chartWidth = SCREEN_WIDTH - spacing.lg * 4;
-  const chartHeight = height - 60;
-  const barWidth = chartWidth / data.length - spacing.sm;
+  // Use dynamic width based on data length for better spacing
+  const itemWidth = Math.max(60, 80);
+  const dynamicChartWidth = Math.max(
+    SCREEN_WIDTH - spacing.lg * 4,
+    data.length * itemWidth,
+  );
+  const chartHeight = height - 80;
+  const barWidth = Math.max(30, itemWidth - spacing.sm * 2);
   const maxValue = Math.max(...data.map((d) => d.value));
+
+  // Format date labels
+  const formatDateLabel = (label) => {
+    try {
+      const date = new Date(label);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+      }
+      return label;
+    } catch (e) {
+      return label;
+    }
+  };
 
   return (
     <View style={styles.chartContainer}>
       {title && <Text style={styles.chartTitle}>{title}</Text>}
-      <Svg width={chartWidth + spacing.lg * 2} height={height}>
-        {/* Bars */}
-        {data.map((item, index) => {
-          const barHeight = (item.value / maxValue) * chartHeight;
-          const x = index * (barWidth + spacing.sm) + spacing.lg;
-          const y = chartHeight - barHeight + 20;
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={true}
+        style={styles.scrollView}
+      >
+        <Svg width={dynamicChartWidth + spacing.lg * 2} height={height}>
+          {/* Bars */}
+          {data.map((item, index) => {
+            const barHeight = (item.value / maxValue) * chartHeight;
+            const x =
+              index * itemWidth + spacing.lg + (itemWidth - barWidth) / 2;
+            const y = chartHeight - barHeight + 30;
 
-          return (
-            <React.Fragment key={index}>
-              {/* Bar */}
-              <Rect
-                x={x}
-                y={y}
-                width={barWidth}
-                height={barHeight}
-                fill={item.color || colors.primary}
-                rx={radii.sm}
-              />
-              {/* Value on top */}
-              <SvgText
-                x={x + barWidth / 2}
-                y={y - 5}
-                fontSize={12}
-                fill={colors.textPrimary}
-                textAnchor="middle"
-                fontWeight="600">
-                {item.value}
-              </SvgText>
-              {/* Label */}
-              <SvgText
-                x={x + barWidth / 2}
-                y={chartHeight + 35}
-                fontSize={11}
-                fill={colors.textSecondary}
-                textAnchor="middle">
-                {item.label.length > 8
-                  ? item.label.substring(0, 8) + "..."
-                  : item.label}
-              </SvgText>
-            </React.Fragment>
-          );
-        })}
-        {/* Base line */}
-        <Line
-          x1={spacing.lg}
-          y1={chartHeight + 20}
-          x2={chartWidth + spacing.lg}
-          y2={chartHeight + 20}
-          stroke={colors.border}
-          strokeWidth={2}
-        />
-      </Svg>
+            return (
+              <React.Fragment key={index}>
+                {/* Bar */}
+                <Rect
+                  x={x}
+                  y={y}
+                  width={barWidth}
+                  height={barHeight}
+                  fill={item.color || colors.primary}
+                  rx={radii.sm}
+                />
+                {/* Value on top */}
+                <SvgText
+                  x={x + barWidth / 2}
+                  y={y - 5}
+                  fontSize={11}
+                  fill={colors.textPrimary}
+                  textAnchor="middle"
+                  fontWeight="600"
+                >
+                  {item.value}
+                </SvgText>
+                {/* Label */}
+                <SvgText
+                  x={x + barWidth / 2}
+                  y={chartHeight + 50}
+                  fontSize={10}
+                  fill={colors.textSecondary}
+                  textAnchor="middle"
+                >
+                  {formatDateLabel(item.label)}
+                </SvgText>
+              </React.Fragment>
+            );
+          })}
+          {/* Base line */}
+          <Line
+            x1={spacing.lg}
+            y1={chartHeight + 30}
+            x2={dynamicChartWidth + spacing.lg}
+            y2={chartHeight + 30}
+            stroke={colors.border}
+            strokeWidth={1}
+          />
+        </Svg>
+      </ScrollView>
     </View>
   );
 }
 
 // Line Chart Component
-export function LineChart({ data, title, height = 200 }) {
+export function LineChart({ data, title, height = 250 }) {
   if (!data || data.length === 0) return null;
 
-  const chartWidth = SCREEN_WIDTH - spacing.lg * 4;
-  const chartHeight = height - 60;
-  const pointSpacing = chartWidth / (data.length - 1 || 1);
-  const maxValue = Math.max(...data.map((d) => d.value));
-  const minValue = Math.min(...data.map((d) => d.value));
+  // Use dynamic width based on data length for better spacing
+  const itemWidth = Math.max(50, 70);
+  const dynamicChartWidth = Math.max(
+    SCREEN_WIDTH - spacing.lg * 4,
+    data.length * itemWidth,
+  );
+  const chartHeight = height - 100;
+  const padding = { top: 20, bottom: 50, left: 40, right: 20 };
+  const plotWidth = dynamicChartWidth - padding.left - padding.right;
+  const plotHeight = chartHeight;
 
-  // Create path for line
-  const pathData = data
+  const maxValue = Math.max(...data.map((d) => d.value), 1);
+  const minValue = 0;
+
+  // Format date labels
+  const formatDateLabel = (label) => {
+    try {
+      const date = new Date(label);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+      }
+      return label;
+    } catch (e) {
+      return label;
+    }
+  };
+
+  // Generate points for the line
+  const points = data
     .map((item, index) => {
-      const x = index * pointSpacing + spacing.lg;
-      const y =
-        chartHeight -
-        ((item.value - minValue) / (maxValue - minValue || 1)) * chartHeight +
-        20;
-      return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+      const x =
+        padding.left + (index / Math.max(data.length - 1, 1)) * plotWidth;
+      const normalizedValue = Math.max(
+        0,
+        (item.value - minValue) / (maxValue - minValue),
+      );
+      const y = padding.top + plotHeight - normalizedValue * plotHeight;
+      return { x, y, ...item };
     })
-    .join(" ");
+    .filter(Boolean);
+
+  const pathData =
+    points.length > 0
+      ? `M ${points.map((p) => `${p.x} ${p.y}`).join(" L ")}`
+      : "";
 
   return (
     <View style={styles.chartContainer}>
       {title && <Text style={styles.chartTitle}>{title}</Text>}
-      <Svg width={chartWidth + spacing.lg * 2} height={height}>
-        {/* Grid lines */}
-        {[0, 0.25, 0.5, 0.75, 1].map((percent, index) => {
-          const y = chartHeight * (1 - percent) + 20;
-          return (
-            <Line
-              key={index}
-              x1={spacing.lg}
-              y1={y}
-              x2={chartWidth + spacing.lg}
-              y2={y}
-              stroke={colors.border}
-              strokeWidth={1}
-              opacity={0.3}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={true}
+        style={styles.scrollView}
+      >
+        <Svg
+          width={dynamicChartWidth + spacing.lg * 2}
+          height={height}
+          style={{ backgroundColor: "transparent" }}
+        >
+          {/* Grid lines */}
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+            const y = padding.top + (1 - ratio) * plotHeight;
+            return (
+              <Line
+                key={`grid-${idx}`}
+                x1={padding.left}
+                y1={y}
+                x2={padding.left + plotWidth}
+                y2={y}
+                stroke={colors.border}
+                strokeWidth={0.5}
+                opacity={0.3}
+              />
+            );
+          })}
+
+          {/* Y-axis label */}
+          <SvgText
+            x={10}
+            y={padding.top + 10}
+            fontSize={9}
+            fill={colors.textSecondary}
+            textAnchor="start"
+          >
+            {Math.round(maxValue)}
+          </SvgText>
+          <SvgText
+            x={10}
+            y={padding.top + plotHeight}
+            fontSize={9}
+            fill={colors.textSecondary}
+            textAnchor="start"
+          >
+            0
+          </SvgText>
+
+          {/* Line */}
+          {pathData && (
+            <Path
+              d={pathData}
+              stroke={colors.primary}
+              strokeWidth={2}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
-          );
-        })}
+          )}
 
-        {/* Line */}
-        <Path
-          d={pathData}
-          stroke={colors.primary}
-          strokeWidth={3}
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Points and labels */}
-        {data.map((item, index) => {
-          const x = index * pointSpacing + spacing.lg;
-          const y =
-            chartHeight -
-            ((item.value - minValue) / (maxValue - minValue || 1)) *
-              chartHeight +
-            20;
-
-          return (
+          {/* Points and labels */}
+          {points.map((point, index) => (
             <React.Fragment key={index}>
-              {/* Point */}
-              <Circle cx={x} cy={y} r={5} fill={colors.primary} />
-              <Circle cx={x} cy={y} r={3} fill={colors.card} />
-
-              {/* Value */}
+              {/* Point circle */}
+              <Circle cx={point.x} cy={point.y} r={4} fill={colors.primary} />
+              {/* Value label */}
               <SvgText
-                x={x}
-                y={y - 12}
-                fontSize={11}
+                x={point.x}
+                y={point.y - 12}
+                fontSize={10}
                 fill={colors.textPrimary}
                 textAnchor="middle"
-                fontWeight="600">
-                {item.value}
+                fontWeight="600"
+              >
+                {point.value}
               </SvgText>
-
-              {/* Label */}
-              <SvgText
-                x={x}
-                y={chartHeight + 35}
-                fontSize={10}
-                fill={colors.textSecondary}
-                textAnchor="middle">
-                {item.label}
-              </SvgText>
+              {/* Date label - show every nth to avoid crowding */}
+              {index % Math.ceil(data.length / 8) === 0 && (
+                <SvgText
+                  x={point.x}
+                  y={padding.top + plotHeight + 25}
+                  fontSize={10}
+                  fill={colors.textSecondary}
+                  textAnchor="middle"
+                >
+                  {formatDateLabel(point.label)}
+                </SvgText>
+              )}
             </React.Fragment>
-          );
-        })}
-      </Svg>
+          ))}
+
+          {/* Base line */}
+          <Line
+            x1={padding.left}
+            y1={padding.top + plotHeight}
+            x2={padding.left + plotWidth}
+            y2={padding.top + plotHeight}
+            stroke={colors.textSecondary}
+            strokeWidth={1}
+          />
+        </Svg>
+      </ScrollView>
     </View>
   );
 }
@@ -219,7 +312,7 @@ export function DonutChart({ data, title, size = 180 }) {
               currentAngle,
               endAngle,
               radius,
-              innerRadius
+              innerRadius,
             );
             currentAngle = endAngle;
 
@@ -235,7 +328,8 @@ export function DonutChart({ data, title, size = 180 }) {
             fontSize={24}
             fill={colors.textPrimary}
             textAnchor="middle"
-            fontWeight="700">
+            fontWeight="700"
+          >
             {total}
           </SvgText>
           <SvgText
@@ -243,7 +337,8 @@ export function DonutChart({ data, title, size = 180 }) {
             y={centerY + 12}
             fontSize={12}
             fill={colors.textSecondary}
-            textAnchor="middle">
+            textAnchor="middle"
+          >
             Total
           </SvgText>
         </Svg>

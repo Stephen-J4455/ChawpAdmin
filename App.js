@@ -24,11 +24,15 @@ import {
 } from "./src/contexts/NotificationContext";
 import AdminAuthScreen from "./src/components/AdminAuthScreen";
 import DashboardPage from "./src/pages/DashboardPage";
-import VendorsManagementPage from "./src/pages/VendorsManagementPage";
-import MealsManagementPage from "./src/pages/MealsManagementPage";
-import OrdersManagementPage from "./src/pages/OrdersManagementPage";
-import UsersManagementPage from "./src/pages/UsersManagementPage";
-import DeliveryManagementPage from "./src/pages/DeliveryManagementPage";
+import CatalogPage from "./src/pages/CatalogPage";
+import LogisticsPage from "./src/pages/LogisticsPage";
+import PeoplePage from "./src/pages/PeoplePage";
+import ActivityPage from "./src/pages/ActivityPage";
+import DebugLogger from "./src/components/DebugLogger";
+import {
+  registerForPushNotifications,
+  setupNotificationListeners,
+} from "./src/services/notifications";
 
 const topInset =
   Platform.OS === "android"
@@ -37,17 +41,66 @@ const topInset =
 
 const bottomNavItems = [
   { id: "dashboard", label: "Dashboard", icon: "grid-outline" },
-  { id: "vendors", label: "Vendors", icon: "storefront-outline" },
-  { id: "meals", label: "Meals", icon: "restaurant-outline" },
-  { id: "orders", label: "Orders", icon: "receipt-outline" },
-  { id: "delivery", label: "Delivery", icon: "bicycle-outline" },
+  { id: "catalog", label: "Catalog", icon: "albums-outline" },
+  { id: "logistics", label: "Logistics", icon: "cube-outline" },
   { id: "users", label: "Users", icon: "people-outline" },
+  { id: "activity", label: "Activity", icon: "layers-outline" },
 ];
 
 function AppContent() {
-  const { user, signIn, signOut } = useAdminAuth();
-  const { showConfirm } = useNotification();
+  const { user, userProfile, signIn, signOut, loading } = useAdminAuth();
+  const { showConfirm, showSuccess, showError } = useNotification();
   const [selectedNav, setSelectedNav] = useState("dashboard");
+  const [mountedPages, setMountedPages] = useState(new Set(["dashboard"]));
+  const [showDebugLogger, setShowDebugLogger] = useState(false);
+
+  // Register for push notifications when user logs in
+  useEffect(() => {
+    if (user) {
+      console.log(
+        "[ChawpAdmin] User logged in, registering for notifications...",
+      );
+      registerForPushNotifications(user.id)
+        .then((token) => {
+          if (token) {
+            console.log(
+              "[ChawpAdmin] Successfully registered for notifications",
+            );
+          } else {
+            console.log("[ChawpAdmin] Failed to get notification token");
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "[ChawpAdmin] Error registering for notifications:",
+            error,
+          );
+        });
+
+      // Setup notification listeners
+      const listeners = setupNotificationListeners(
+        (notification) => {
+          // Handle notification received while app is in foreground
+          console.log("[ChawpAdmin] Notification received:", notification);
+          const { title, body } = notification.request.content;
+          showSuccess(title || "New Notification", body || "");
+        },
+        (response) => {
+          // Handle notification tapped
+          console.log("[ChawpAdmin] Notification tapped:", response);
+        },
+      );
+
+      return () => {
+        listeners.remove();
+      };
+    }
+  }, [user]);
+
+  const handleNavigation = (pageId) => {
+    setSelectedNav(pageId);
+    setMountedPages((prev) => new Set([...prev, pageId]));
+  };
 
   const handleSignIn = async (email, password) => {
     const result = await signIn(email, password);
@@ -68,86 +121,167 @@ function AppContent() {
     });
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ExpoStatusBar style="light" />
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </SafeAreaView>
+    );
+  }
+
   if (!user) {
-    return <AdminAuthScreen onSignIn={handleSignIn} />;
+    return (
+      <>
+        <ExpoStatusBar style="light" />
+        <AdminAuthScreen onSignIn={handleSignIn} />
+      </>
+    );
   }
 
   const renderPage = () => {
-    switch (selectedNav) {
-      case "dashboard":
-        return <DashboardPage />;
-      case "vendors":
-        return <VendorsManagementPage />;
-      case "meals":
-        return <MealsManagementPage />;
-      case "orders":
-        return <OrdersManagementPage />;
-      case "delivery":
-        return <DeliveryManagementPage />;
-      case "users":
-        return <UsersManagementPage />;
-      default:
-        return <DashboardPage />;
-    }
+    return (
+      <>
+        {mountedPages.has("dashboard") && (
+          <View
+            style={
+              selectedNav === "dashboard"
+                ? styles.pageVisible
+                : styles.pageHidden
+            }
+          >
+            <DashboardPage />
+          </View>
+        )}
+        {mountedPages.has("catalog") && (
+          <View
+            style={
+              selectedNav === "catalog" ? styles.pageVisible : styles.pageHidden
+            }
+          >
+            <CatalogPage />
+          </View>
+        )}
+        {mountedPages.has("logistics") && (
+          <View
+            style={
+              selectedNav === "logistics"
+                ? styles.pageVisible
+                : styles.pageHidden
+            }
+          >
+            <LogisticsPage />
+          </View>
+        )}
+        {mountedPages.has("users") && (
+          <View
+            style={
+              selectedNav === "users" ? styles.pageVisible : styles.pageHidden
+            }
+          >
+            <PeoplePage />
+          </View>
+        )}
+        {mountedPages.has("activity") && (
+          <View
+            style={
+              selectedNav === "activity"
+                ? styles.pageVisible
+                : styles.pageHidden
+            }
+          >
+            <ActivityPage />
+          </View>
+        )}
+      </>
+    );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ExpoStatusBar style="light" />
+    <>
+      <SafeAreaView style={styles.container}>
+        <ExpoStatusBar style="light" />
 
-      {/* Header */}
-      <LinearGradient
-        colors={[colors.primary, colors.primaryDark]}
-        style={[styles.header, { paddingTop: topInset }]}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.headerTitle}>CHAWP ADMIN</Text>
-            <Text style={styles.headerSubtitle}>
-              {bottomNavItems.find((item) => item.id === selectedNav)?.label ||
-                "Dashboard"}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.signOutButton}
-            onPress={handleSignOut}>
-            <Ionicons name="log-out-outline" size={18} color={colors.card} />
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      {/* Page Content */}
-      <View style={styles.content}>{renderPage()}</View>
-
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        {bottomNavItems.map((item) => {
-          const isActive = selectedNav === item.id;
-          return (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.navItem}
-              onPress={() => setSelectedNav(item.id)}>
-              <View
-                style={[
-                  styles.navIconContainer,
-                  isActive && styles.navIconContainerActive,
-                ]}>
-                <Ionicons
-                  name={item.icon}
-                  size={24}
-                  color={isActive ? colors.primary : colors.textSecondary}
-                />
-              </View>
-              <Text
-                style={[styles.navLabel, isActive && styles.navLabelActive]}>
-                {item.label}
+        {/* Header */}
+        <LinearGradient
+          colors={[colors.primary, colors.primaryDark]}
+          style={[styles.header, { paddingTop: topInset }]}
+        >
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.headerTitle}>CHAWP ADMIN</Text>
+              <Text style={styles.headerSubtitle}>
+                {bottomNavItems.find((item) => item.id === selectedNav)
+                  ?.label || "Dashboard"}
               </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </SafeAreaView>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {userProfile?.role === "super_admin" && (
+                <TouchableOpacity
+                  style={styles.debugButton}
+                  onPress={() => setShowDebugLogger(true)}
+                >
+                  <Ionicons name="bug-outline" size={18} color={colors.card} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.signOutButton}
+                onPress={handleSignOut}
+              >
+                <Ionicons
+                  name="log-out-outline"
+                  size={18}
+                  color={colors.card}
+                />
+                <Text style={styles.signOutText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* Page Content */}
+        <View style={styles.content}>{renderPage()}</View>
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          {bottomNavItems.map((item) => {
+            const isActive = selectedNav === item.id;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.navItem}
+                onPress={() => handleNavigation(item.id)}
+              >
+                <View
+                  style={[
+                    styles.navIconContainer,
+                    isActive && styles.navIconContainerActive,
+                  ]}
+                >
+                  <Ionicons
+                    name={item.icon}
+                    size={24}
+                    color={isActive ? colors.primary : colors.textSecondary}
+                  />
+                </View>
+                <Text
+                  style={[styles.navLabel, isActive && styles.navLabelActive]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </SafeAreaView>
+
+      {/* Debug Logger - Render outside SafeAreaView for full screen overlay */}
+      <DebugLogger
+        visible={showDebugLogger}
+        onClose={() => setShowDebugLogger(false)}
+      />
+    </>
   );
 }
 
@@ -184,7 +318,8 @@ class ErrorBoundary extends React.Component {
             justifyContent: "center",
             alignItems: "center",
             padding: 20,
-          }}>
+          }}
+        >
           <ExpoStatusBar style="light" />
           <Text style={{ fontSize: 48, marginBottom: 20 }}>⚠️</Text>
           <Text
@@ -193,7 +328,8 @@ class ErrorBoundary extends React.Component {
               color: "#FFFFFF",
               fontWeight: "bold",
               marginBottom: 10,
-            }}>
+            }}
+          >
             App Error
           </Text>
           <Text
@@ -202,7 +338,8 @@ class ErrorBoundary extends React.Component {
               color: "#6C7796",
               textAlign: "center",
               marginBottom: 20,
-            }}>
+            }}
+          >
             {this.state.error?.message || "Unknown error occurred"}
           </Text>
           <TouchableOpacity
@@ -214,7 +351,8 @@ class ErrorBoundary extends React.Component {
             }}
             onPress={() => {
               this.setState({ hasError: false, error: null, errorInfo: null });
-            }}>
+            }}
+          >
             <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>
               Try Again
             </Text>
@@ -260,7 +398,8 @@ export default function App() {
           justifyContent: "center",
           alignItems: "center",
           padding: 20,
-        }}>
+        }}
+      >
         <ExpoStatusBar style="light" />
         <Text style={{ fontSize: 48, marginBottom: 20 }}>⚠️</Text>
         <Text
@@ -269,7 +408,8 @@ export default function App() {
             color: "#FFFFFF",
             fontWeight: "bold",
             marginBottom: 10,
-          }}>
+          }}
+        >
           Initialization Error
         </Text>
         <Text
@@ -278,7 +418,8 @@ export default function App() {
             color: "#6C7796",
             textAlign: "center",
             marginBottom: 20,
-          }}>
+          }}
+        >
           {appError}
         </Text>
         <TouchableOpacity
@@ -291,7 +432,8 @@ export default function App() {
           onPress={() => {
             setAppError(null);
             setAppReady(false);
-          }}>
+          }}
+        >
           <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>Try Again</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -306,7 +448,8 @@ export default function App() {
           backgroundColor: "#070B16",
           justifyContent: "center",
           alignItems: "center",
-        }}>
+        }}
+      >
         <ExpoStatusBar style="light" />
         <ActivityIndicator size="large" color="#2E6BFF" />
         <Text style={{ fontSize: 14, color: "#6C7796", marginTop: 20 }}>
@@ -358,6 +501,14 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     marginTop: spacing.xs,
     fontWeight: "500",
+  },
+  debugButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
   signOutButton: {
     flexDirection: "row",
@@ -420,5 +571,25 @@ const styles = StyleSheet.create({
   navLabelActive: {
     color: colors.primary,
     fontWeight: "600",
+  },
+  pageVisible: {
+    flex: 1,
+  },
+  pageHidden: {
+    flex: 0,
+    width: 0,
+    height: 0,
+    overflow: "hidden",
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    color: colors.textSecondary,
+    fontSize: 14,
   },
 });

@@ -9,6 +9,8 @@ import {
   RefreshControl,
   Modal,
   Image,
+  TextInput,
+  Linking,
 } from "react-native";
 import { colors, spacing, radii } from "../theme";
 import { useNotification } from "../contexts/NotificationContext";
@@ -18,6 +20,7 @@ import {
   fetchAllDeliveryPersonnel,
   assignDeliveryToOrder,
   unassignDeliveryFromOrder,
+  createDeliveryPayout,
 } from "../services/adminApi";
 
 const ORDER_STATUSES = [
@@ -41,6 +44,11 @@ export default function OrdersManagementPage() {
   const [deliveryPersonnel, setDeliveryPersonnel] = useState([]);
   const [deliveryModalVisible, setDeliveryModalVisible] = useState(false);
   const [assigningDelivery, setAssigningDelivery] = useState(false);
+  const [contactVendorModalVisible, setContactVendorModalVisible] =
+    useState(false);
+  const [contactMessage, setContactMessage] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [contactMethod, setContactMethod] = useState("sms"); // 'sms' or 'call'
 
   useEffect(() => {
     loadOrders();
@@ -59,7 +67,7 @@ export default function OrdersManagementPage() {
     const result = await fetchAllDeliveryPersonnel();
     if (result.success) {
       setDeliveryPersonnel(
-        result.data.filter((p) => p.is_verified && p.is_available)
+        result.data.filter((p) => p.is_verified && p.is_available),
       );
     }
   };
@@ -78,8 +86,38 @@ export default function OrdersManagementPage() {
   const handleUpdateStatus = async (orderId, newStatus) => {
     const result = await updateOrderStatus(orderId, newStatus);
     if (result.success) {
+      // Create delivery payout if order is delivered
+      if (newStatus === "delivered" && selectedOrder?.delivery_personnel_id) {
+        const deliveryFee = selectedOrder.delivery_fee || 0;
+        if (deliveryFee > 0) {
+          const payoutResult = await createDeliveryPayout({
+            deliveryPersonnelId: selectedOrder.delivery_personnel_id,
+            orderId: orderId,
+            amount: deliveryFee,
+            type: "delivery_fee",
+            description: `Delivery fee for order #${selectedOrder.order_number || orderId}`,
+            status: "pending",
+          });
+
+          if (payoutResult.success) {
+            showSuccess(
+              "Success",
+              "Order delivered and payout created for delivery personnel",
+            );
+          } else {
+            showSuccess(
+              "Success",
+              "Order status updated (payout creation failed)",
+            );
+          }
+        } else {
+          showSuccess("Success", "Order status updated successfully");
+        }
+      } else {
+        showSuccess("Success", "Order status updated successfully");
+      }
+
       loadOrders();
-      showSuccess("Success", "Order status updated successfully");
       setModalVisible(false);
     } else {
       showError("Error", result.error || "Failed to update order status");
@@ -92,15 +130,19 @@ export default function OrdersManagementPage() {
     setAssigningDelivery(true);
     const result = await assignDeliveryToOrder(
       selectedOrder.id,
-      deliveryPersonnelId
+      deliveryPersonnelId,
     );
 
     if (result.success) {
-      await loadOrders();
-      setSelectedOrder({
+      // Update local state directly instead of reloading all orders
+      const updatedOrder = {
         ...selectedOrder,
         delivery_personnel_id: deliveryPersonnelId,
-      });
+      };
+      setSelectedOrder(updatedOrder);
+      setOrders(
+        orders.map((o) => (o.id === selectedOrder.id ? updatedOrder : o)),
+      );
       showSuccess("Success", "Delivery personnel assigned successfully");
       setDeliveryModalVisible(false);
     } else {
@@ -116,13 +158,116 @@ export default function OrdersManagementPage() {
     const result = await unassignDeliveryFromOrder(selectedOrder.id);
 
     if (result.success) {
-      await loadOrders();
-      setSelectedOrder({ ...selectedOrder, delivery_personnel_id: null });
+      // Update local state directly instead of reloading all orders
+      const updatedOrder = { ...selectedOrder, delivery_personnel_id: null };
+      setSelectedOrder(updatedOrder);
+      setOrders(
+        orders.map((o) => (o.id === selectedOrder.id ? updatedOrder : o)),
+      );
       showSuccess("Success", "Delivery personnel unassigned");
     } else {
       showError("Error", result.error || "Failed to unassign delivery");
     }
     setAssigningDelivery(false);
+  };
+
+  const handleContactVendor = () => {
+    setContactMessage("");
+    setContactMethod("sms");
+    setContactVendorModalVisible(true);
+  };
+
+  const handleCallVendor = async () => {
+    if (!selectedOrder?.chawp_vendors?.phone) {
+      showError("Error", "Vendor phone number not available");
+      return;
+    }
+
+    setSendingMessage(true);
+    let phoneNumber = selectedOrder.chawp_vendors.phone;
+    // Clean phone number - remove spaces, dashes, parentheses
+    phoneNumber = phoneNumber.replace(/[\s\-\(\)]/g, "");
+    const phoneUrl = `tel:${phoneNumber}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(phoneUrl);
+      // Try to open even if canOpenURL returns false, as it may still work
+      if (canOpen) {
+        await Linking.openURL(phoneUrl);
+        showSuccess("Success", `Calling ${phoneNumber}`);
+        setContactVendorModalVisible(false);
+      } else {
+        // Try anyway - sometimes canOpenURL doesn't work but the actual call does
+        try {
+          await Linking.openURL(phoneUrl);
+          showSuccess("Success", `Calling ${phoneNumber}`);
+          setContactVendorModalVisible(false);
+        } catch (tryError) {
+          showError("Error", "Cannot initiate call on this device");
+        }
+      }
+    } catch (error) {
+      showError("Error", "Failed to initiate call");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const handleSendSMS = async () => {
+    if (!selectedOrder?.chawp_vendors?.phone) {
+      showError("Error", "Vendor phone number not available");
+      return;
+    }
+
+    if (!contactMessage.trim()) {
+      showError("Error", "Please enter a message");
+      return;
+    }
+
+    setSendingMessage(true);
+    let phoneNumber = selectedOrder.chawp_vendors.phone;
+    // Clean phone number - remove spaces, dashes, parentheses
+    phoneNumber = phoneNumber.replace(/[\s\-\(\)]/g, "");
+    const message = encodeURIComponent(contactMessage);
+    const smsUrl = `sms:${phoneNumber}?body=${message}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(smsUrl);
+      if (canOpen) {
+        await Linking.openURL(smsUrl);
+        showSuccess(
+          "Success",
+          `SMS sent to ${selectedOrder.chawp_vendors?.name || "vendor"}`,
+        );
+        setContactMessage("");
+        setContactVendorModalVisible(false);
+      } else {
+        // Try anyway - sometimes canOpenURL doesn't work but the actual SMS does
+        try {
+          await Linking.openURL(smsUrl);
+          showSuccess(
+            "Success",
+            `SMS sent to ${selectedOrder.chawp_vendors?.name || "vendor"}`,
+          );
+          setContactMessage("");
+          setContactVendorModalVisible(false);
+        } catch (tryError) {
+          showError("Error", "Cannot send SMS on this device");
+        }
+      }
+    } catch (error) {
+      showError("Error", "Failed to send SMS");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const handleSendVendorMessage = async () => {
+    if (contactMethod === "sms") {
+      await handleSendSMS();
+    } else if (contactMethod === "call") {
+      await handleCallVendor();
+    }
   };
 
   const getStatusColor = (status) => {
@@ -154,18 +299,21 @@ export default function OrdersManagementPage() {
         horizontal
         style={styles.filterContainer}
         contentContainerStyle={styles.filterContent}
-        showsHorizontalScrollIndicator={false}>
+        showsHorizontalScrollIndicator={false}
+      >
         <TouchableOpacity
           style={[
             styles.filterButton,
             filterStatus === "all" && styles.filterButtonActive,
           ]}
-          onPress={() => setFilterStatus("all")}>
+          onPress={() => setFilterStatus("all")}
+        >
           <Text
             style={[
               styles.filterText,
               filterStatus === "all" && styles.filterTextActive,
-            ]}>
+            ]}
+          >
             All
           </Text>
         </TouchableOpacity>
@@ -176,12 +324,14 @@ export default function OrdersManagementPage() {
               styles.filterButton,
               filterStatus === status.value && styles.filterButtonActive,
             ]}
-            onPress={() => setFilterStatus(status.value)}>
+            onPress={() => setFilterStatus(status.value)}
+          >
             <Text
               style={[
                 styles.filterText,
                 filterStatus === status.value && styles.filterTextActive,
-              ]}>
+              ]}
+            >
               {status.label}
             </Text>
           </TouchableOpacity>
@@ -192,12 +342,14 @@ export default function OrdersManagementPage() {
         style={styles.scrollView}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }>
+        }
+      >
         {filteredOrders.map((order) => (
           <TouchableOpacity
             key={order.id}
             style={styles.orderCard}
-            onPress={() => handleViewOrder(order)}>
+            onPress={() => handleViewOrder(order)}
+          >
             <View style={styles.orderHeader}>
               <Text style={styles.orderVendor} numberOfLines={2}>
                 {order.chawp_vendors?.name || "Unknown Vendor"}
@@ -206,7 +358,8 @@ export default function OrdersManagementPage() {
                 style={[
                   styles.statusBadge,
                   { backgroundColor: getStatusColor(order.status) + "20" },
-                ]}>
+                ]}
+              >
                 <Text
                   style={[
                     styles.statusText,
@@ -214,7 +367,8 @@ export default function OrdersManagementPage() {
                   ]}
                   numberOfLines={1}
                   adjustsFontSizeToFit={true}
-                  minimumFontScale={0.8}>
+                  minimumFontScale={0.8}
+                >
                   {order.status.replace(/_/g, " ")}
                 </Text>
               </View>
@@ -228,7 +382,7 @@ export default function OrdersManagementPage() {
                       (item) =>
                         `${item.chawp_meals?.title || "Unknown"} (x${
                           item.quantity
-                        })`
+                        })`,
                     )
                     .join(", ")
                 : "No items"}
@@ -267,7 +421,8 @@ export default function OrdersManagementPage() {
         visible={modalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setModalVisible(false)}>
+        onRequestClose={() => setModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Order Details</Text>
@@ -275,10 +430,22 @@ export default function OrdersManagementPage() {
             {selectedOrder && (
               <ScrollView style={styles.modalBody}>
                 <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Vendor</Text>
-                  <Text style={styles.detailValue}>
-                    {selectedOrder.chawp_vendors?.name || "Unknown"}
-                  </Text>
+                  <View style={styles.vendorHeaderContainer}>
+                    <View style={styles.vendorInfoContainer}>
+                      <Text style={styles.detailLabel}>Vendor</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedOrder.chawp_vendors?.name || "Unknown"}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.contactVendorButton}
+                      onPress={handleContactVendor}
+                    >
+                      <Text style={styles.contactVendorButtonText}>
+                        📞 Contact
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <View style={styles.detailSection}>
@@ -309,7 +476,7 @@ export default function OrdersManagementPage() {
                   {selectedOrder.items && selectedOrder.items.length > 0 ? (
                     selectedOrder.items.map((item, index) => {
                       const itemPrice = parseFloat(
-                        item.price || item.chawp_meals?.price || 0
+                        item.price || item.chawp_meals?.price || 0,
                       );
                       return (
                         <View key={index} style={styles.orderItemCard}>
@@ -366,7 +533,8 @@ export default function OrdersManagementPage() {
                       <TouchableOpacity
                         style={styles.unassignButton}
                         onPress={handleUnassignDelivery}
-                        disabled={assigningDelivery}>
+                        disabled={assigningDelivery}
+                      >
                         {assigningDelivery ? (
                           <ActivityIndicator size="small" color="#fff" />
                         ) : (
@@ -379,7 +547,8 @@ export default function OrdersManagementPage() {
                   ) : (
                     <TouchableOpacity
                       style={styles.assignButton}
-                      onPress={() => setDeliveryModalVisible(true)}>
+                      onPress={() => setDeliveryModalVisible(true)}
+                    >
                       <Text style={styles.assignButtonText}>
                         + Assign Delivery
                       </Text>
@@ -409,7 +578,8 @@ export default function OrdersManagementPage() {
                         ]}
                         onPress={() =>
                           handleUpdateStatus(selectedOrder.id, status.value)
-                        }>
+                        }
+                      >
                         <Text
                           style={[
                             styles.statusButtonText,
@@ -419,7 +589,8 @@ export default function OrdersManagementPage() {
                                   ? colors.white
                                   : colors.textPrimary,
                             },
-                          ]}>
+                          ]}
+                        >
                           {status.label}
                         </Text>
                       </TouchableOpacity>
@@ -431,7 +602,8 @@ export default function OrdersManagementPage() {
 
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={() => setModalVisible(false)}>
+              onPress={() => setModalVisible(false)}
+            >
               <Text style={styles.closeButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
@@ -443,19 +615,32 @@ export default function OrdersManagementPage() {
         visible={deliveryModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setDeliveryModalVisible(false)}>
+        onRequestClose={() => setDeliveryModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Assign Delivery Personnel</Text>
 
             <ScrollView style={styles.deliveryList}>
+              {assigningDelivery && (
+                <View style={styles.assigningOverlay}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={styles.assigningText}>
+                    Assigning delivery...
+                  </Text>
+                </View>
+              )}
               {deliveryPersonnel.length > 0 ? (
                 deliveryPersonnel.map((person) => (
                   <TouchableOpacity
                     key={person.id}
-                    style={styles.deliveryPersonCard}
+                    style={[
+                      styles.deliveryPersonCard,
+                      assigningDelivery && styles.deliveryPersonCardDisabled,
+                    ]}
                     onPress={() => handleAssignDelivery(person.id)}
-                    disabled={assigningDelivery || !person.is_available}>
+                    disabled={assigningDelivery || !person.is_available}
+                  >
                     <View style={styles.deliveryPersonInfo}>
                       <Text style={styles.deliveryPersonName}>
                         {person.chawp_user_profiles?.full_name ||
@@ -501,9 +686,134 @@ export default function OrdersManagementPage() {
 
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={() => setDeliveryModalVisible(false)}>
+              onPress={() => setDeliveryModalVisible(false)}
+            >
               <Text style={styles.closeButtonText}>Cancel</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Contact Vendor Modal */}
+      <Modal
+        visible={contactVendorModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setContactVendorModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.contactModalContent}>
+            <Text style={styles.modalTitle}>
+              Contact {selectedOrder?.chawp_vendors?.name || "Vendor"}
+            </Text>
+
+            <View style={styles.contactMethodContainer}>
+              <Text style={styles.contactLabel}>Choose Contact Method:</Text>
+              <View style={styles.methodButtonsRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.methodButton,
+                    contactMethod === "sms" && styles.methodButtonActive,
+                  ]}
+                  onPress={() => setContactMethod("sms")}
+                  disabled={sendingMessage}
+                >
+                  <Text
+                    style={[
+                      styles.methodButtonText,
+                      contactMethod === "sms" && styles.methodButtonTextActive,
+                    ]}
+                  >
+                    📱 SMS
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.methodButton,
+                    contactMethod === "call" && styles.methodButtonActive,
+                  ]}
+                  onPress={() => setContactMethod("call")}
+                  disabled={sendingMessage}
+                >
+                  <Text
+                    style={[
+                      styles.methodButtonText,
+                      contactMethod === "call" && styles.methodButtonTextActive,
+                    ]}
+                  >
+                    ☎️ Call
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.contactModalBody}>
+              {contactMethod === "sms" && (
+                <>
+                  <Text style={styles.contactLabel}>Message:</Text>
+                  <TextInput
+                    style={styles.messageInput}
+                    placeholder="Type your SMS message..."
+                    placeholderTextColor={colors.textMuted}
+                    multiline={true}
+                    numberOfLines={5}
+                    value={contactMessage}
+                    onChangeText={setContactMessage}
+                    editable={!sendingMessage}
+                  />
+                </>
+              )}
+
+              {contactMethod === "call" && (
+                <View style={styles.callInfoContainer}>
+                  <Text style={styles.callInfoText}>
+                    📞 Tap "Call Vendor" to initiate a phone call
+                  </Text>
+                  <Text style={styles.callInfoSubtext}>
+                    The vendor's phone will ring on your device
+                  </Text>
+                </View>
+              )}
+
+              <Text style={styles.vendorInfoText}>
+                Vendor: {selectedOrder?.chawp_vendors?.name}
+              </Text>
+              {selectedOrder?.chawp_vendors?.phone && (
+                <Text style={styles.vendorInfoText}>
+                  📞 {selectedOrder.chawp_vendors.phone}
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.contactButtonsContainer}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setContactVendorModalVisible(false)}
+                disabled={sendingMessage}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  sendingMessage && styles.sendButtonDisabled,
+                ]}
+                onPress={handleSendVendorMessage}
+                disabled={
+                  sendingMessage || !selectedOrder?.chawp_vendors?.phone
+                }
+              >
+                {sendingMessage ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.sendButtonText}>
+                    {contactMethod === "sms" ? "Send SMS" : "Call Vendor"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -791,6 +1101,25 @@ const styles = StyleSheet.create({
   },
   deliveryList: {
     maxHeight: 400,
+    position: "relative",
+  },
+  assigningOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+    borderRadius: radii.md,
+  },
+  assigningText: {
+    marginTop: spacing.md,
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.primary,
   },
   deliveryPersonCard: {
     backgroundColor: colors.card,
@@ -799,6 +1128,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  deliveryPersonCardDisabled: {
+    opacity: 0.5,
   },
   deliveryPersonInfo: {
     flex: 1,
@@ -844,5 +1176,156 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 11,
     fontWeight: "600",
+  },
+  // Contact Vendor Styles
+  vendorHeaderContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: spacing.md,
+  },
+  vendorInfoContainer: {
+    flex: 1,
+  },
+  contactVendorButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    justifyContent: "center",
+    alignItems: "center",
+    minWidth: 80,
+  },
+  contactVendorButtonText: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  contactModalContent: {
+    backgroundColor: colors.card,
+    borderRadius: radii.lg,
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.xl * 2,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    maxHeight: "80%",
+  },
+  contactModalBody: {
+    paddingVertical: spacing.lg,
+  },
+  contactLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
+  },
+  messageInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    color: colors.textPrimary,
+    backgroundColor: colors.background,
+    textAlignVertical: "top",
+    marginBottom: spacing.lg,
+    fontFamily: "System",
+    fontSize: 14,
+  },
+  vendorInfoText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginVertical: spacing.xs,
+    fontWeight: "500",
+  },
+  contactButtonsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingVertical: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  sendButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: radii.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sendButtonDisabled: {
+    opacity: 0.6,
+  },
+  sendButtonText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  contactMethodContainer: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  methodButtonsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  methodButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  methodButtonActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + "15",
+  },
+  methodButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  methodButtonTextActive: {
+    color: colors.primary,
+  },
+  callInfoContainer: {
+    backgroundColor: colors.primary + "10",
+    borderRadius: radii.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  callInfoText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.primary,
+    marginBottom: spacing.sm,
+  },
+  callInfoSubtext: {
+    fontSize: 12,
+    color: colors.textSecondary,
   },
 });

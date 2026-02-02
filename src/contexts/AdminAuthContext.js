@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../config/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const AdminAuthContext = createContext({});
+const ADMIN_STORAGE_KEY = "@chawp_admin_session";
 
 export const useAdminAuth = () => {
   const context = useContext(AdminAuthContext);
@@ -15,7 +17,7 @@ export const AdminAuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [initError, setInitError] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -23,13 +25,16 @@ export const AdminAuthProvider = ({ children }) => {
 
     const initAuth = async () => {
       try {
-        if (!supabase || !supabase.auth) {
-          throw new Error("Supabase client not initialized");
+        // Load session from cache first for faster startup
+        const cachedSession = await AsyncStorage.getItem(ADMIN_STORAGE_KEY);
+        if (cachedSession && mounted) {
+          const parsedSession = JSON.parse(cachedSession);
+          setSession(parsedSession);
+          setUser(parsedSession.user);
+          setUserProfile(parsedSession.profile);
         }
 
-        // Get initial session with error handling
-        if (__DEV__) console.log("AdminAuth: Initializing...");
-
+        // Then verify with Supabase
         const {
           data: { session },
           error: sessionError,
@@ -41,22 +46,8 @@ export const AdminAuthProvider = ({ children }) => {
 
         if (!mounted) return;
 
-        if (__DEV__) {
-          console.log(
-            "AdminAuth: Session retrieved",
-            session ? "exists" : "null"
-          );
-        }
-
         if (session) {
           // Verify user has admin role
-          if (__DEV__) {
-            console.log(
-              "AdminAuth: Checking admin role for user:",
-              session.user.id
-            );
-          }
-
           const { data: profile, error: profileError } = await supabase
             .from("chawp_user_profiles")
             .select("role")
@@ -65,52 +56,54 @@ export const AdminAuthProvider = ({ children }) => {
 
           if (!mounted) return;
 
-          if (__DEV__) {
-            console.log("AdminAuth: Profile check result", {
-              profile,
-              profileError,
-            });
-          }
-
           if (
             profileError ||
             !profile ||
             (profile.role !== "admin" && profile.role !== "super_admin")
           ) {
             // User doesn't have admin role, sign them out
-            if (__DEV__)
-              console.log("AdminAuth: User is not admin, signing out");
             await supabase.auth.signOut();
+            await AsyncStorage.removeItem(ADMIN_STORAGE_KEY);
             if (mounted) {
               setSession(null);
               setUser(null);
+              setUserProfile(null);
               setLoading(false);
             }
             return;
           }
+
+          // Store session and profile
+          if (mounted) {
+            setUserProfile(profile);
+            setSession(session);
+            setUser(session.user);
+            await AsyncStorage.setItem(
+              ADMIN_STORAGE_KEY,
+              JSON.stringify({ ...session, profile }),
+            );
+          }
+        } else {
+          // No session, clear cache
+          await AsyncStorage.removeItem(ADMIN_STORAGE_KEY);
+          if (mounted) {
+            setSession(null);
+            setUser(null);
+            setUserProfile(null);
+          }
         }
 
         if (mounted) {
-          setSession(session);
-          setUser(session?.user ?? null);
           setLoading(false);
-          setInitError(null);
-          if (__DEV__) console.log("AdminAuth: Initialization complete");
         }
       } catch (error) {
-        if (__DEV__) {
-          console.error("AdminAuth: Initialization error:", error);
-          console.error("AdminAuth: Error details:", {
-            message: error?.message,
-            stack: error?.stack,
-            name: error?.name,
-          });
-        }
+        console.error("AdminAuth: Initialization error:", error);
+        await AsyncStorage.removeItem(ADMIN_STORAGE_KEY);
         if (mounted) {
           setSession(null);
           setUser(null);
+          setUserProfile(null);
           setLoading(false);
-          setInitError(error?.message || "Failed to initialize authentication");
         }
       }
     };
@@ -145,8 +138,14 @@ export const AdminAuthProvider = ({ children }) => {
                 if (mounted) {
                   setSession(null);
                   setUser(null);
+                  setUserProfile(null);
                 }
                 return;
+              }
+
+              // Store profile
+              if (mounted) {
+                setUserProfile(profile);
               }
             }
 
@@ -163,7 +162,7 @@ export const AdminAuthProvider = ({ children }) => {
               setLoading(false);
             }
           }
-        }
+        },
       );
 
       subscription = data?.subscription;
@@ -208,6 +207,13 @@ export const AdminAuthProvider = ({ children }) => {
         throw new Error("Access denied. Admin privileges required.");
       }
 
+      // Update last login timestamp
+      await supabase
+        .from("chawp_user_profiles")
+        .update({ last_login_at: new Date().toISOString() })
+        .eq("id", data.user.id);
+
+      setUserProfile(profile);
       return { success: true, data };
     } catch (error) {
       console.error("Sign in error:", error);
@@ -237,6 +243,8 @@ export const AdminAuthProvider = ({ children }) => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      setUserProfile(null);
+      await AsyncStorage.removeItem(ADMIN_STORAGE_KEY);
       return { success: true };
     } catch (error) {
       console.error("Sign out error:", error);
@@ -248,6 +256,7 @@ export const AdminAuthProvider = ({ children }) => {
     user,
     session,
     loading,
+    userProfile,
     signIn,
     signUp,
     signOut,

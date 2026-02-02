@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal,
   Image,
+  Linking,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -59,7 +60,6 @@ import {
   fetchAllVendors,
   createVendor,
   updateVendor,
-  deleteVendor,
   fetchVendorHours,
   createVendorHours,
   updateVendorHours,
@@ -111,6 +111,13 @@ export default function VendorsManagementPage() {
   const [payoutAmount, setPayoutAmount] = useState("");
   const [payoutNotes, setPayoutNotes] = useState("");
   const [creatingPayout, setCreatingPayout] = useState(false);
+
+  // Contact vendor state
+  const [contactVendorModalVisible, setContactVendorModalVisible] =
+    useState(false);
+  const [contactMessage, setContactMessage] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [contactMethod, setContactMethod] = useState("sms"); // 'sms' or 'call'
 
   useEffect(() => {
     loadVendors();
@@ -300,31 +307,11 @@ export default function VendorsManagementPage() {
       loadVendors();
       showSuccess(
         "Success",
-        `Vendor ${editingVendor ? "updated" : "created"} successfully`
+        `Vendor ${editingVendor ? "updated" : "created"} successfully`,
       );
     } else {
       showError("Error", result.error || "Failed to save vendor");
     }
-  };
-
-  const handleDelete = (vendor) => {
-    showConfirm({
-      type: "error",
-      title: "Delete Vendor",
-      message: `Are you sure you want to delete ${vendor.name}?`,
-      confirmText: "Delete",
-      cancelText: "Cancel",
-      confirmStyle: "destructive",
-      onConfirm: async () => {
-        const result = await deleteVendor(vendor.id);
-        if (result.success) {
-          loadVendors();
-          showSuccess("Success", "Vendor deleted successfully");
-        } else {
-          showError("Error", result.error || "Failed to delete vendor");
-        }
-      },
-    });
   };
 
   const handleToggleOpen = async (vendor) => {
@@ -335,7 +322,7 @@ export default function VendorsManagementPage() {
       loadVendors();
       showSuccess(
         "Success",
-        `Vendor is now ${newOpenStatus ? "OPEN" : "CLOSED"}`
+        `Vendor is now ${newOpenStatus ? "OPEN" : "CLOSED"}`,
       );
     } else {
       showError("Error", result.error || "Failed to update vendor status");
@@ -396,7 +383,7 @@ export default function VendorsManagementPage() {
 
     const result = await updateVendorOperationalStatus(
       selectedVendor.id,
-      newStatus
+      newStatus,
     );
     if (result.success) {
       // Update the selected vendor with new status
@@ -486,7 +473,7 @@ export default function VendorsManagementPage() {
 
     const result = await verifyVendorBankDetails(
       bankDetails.id,
-      newVerifiedState
+      newVerifiedState,
     );
     if (result.success) {
       setBankDetails({
@@ -498,12 +485,12 @@ export default function VendorsManagementPage() {
         "Success",
         `Bank details ${
           newVerifiedState ? "verified" : "unverified"
-        } successfully`
+        } successfully`,
       );
     } else {
       showError(
         "Error",
-        result.error || "Failed to update verification status"
+        result.error || "Failed to update verification status",
       );
     }
     setVerifyingBank(false);
@@ -518,7 +505,7 @@ export default function VendorsManagementPage() {
     if (!bankDetails || !bankDetails.is_verified) {
       showError(
         "Error",
-        "Bank details must be verified before creating payouts"
+        "Bank details must be verified before creating payouts",
       );
       return;
     }
@@ -566,6 +553,104 @@ export default function VendorsManagementPage() {
     }
   };
 
+  const handleContactVendor = async () => {
+    setContactVendorModalVisible(true);
+    setContactMethod("sms");
+    setContactMessage("");
+  };
+
+  const handleCallVendor = async () => {
+    if (!selectedVendor?.phone) {
+      showError("Error", "Vendor phone number not available");
+      return;
+    }
+
+    setSendingMessage(true);
+    let phoneNumber = selectedVendor.phone;
+    // Clean phone number - remove spaces, dashes, parentheses
+    phoneNumber = phoneNumber.replace(/[\s\-\(\)]/g, "");
+    const phoneUrl = `tel:${phoneNumber}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(phoneUrl);
+      if (canOpen) {
+        await Linking.openURL(phoneUrl);
+        showSuccess("Success", `Calling ${phoneNumber}`);
+        setContactVendorModalVisible(false);
+      } else {
+        // Try anyway - sometimes canOpenURL doesn't work but the actual call does
+        try {
+          await Linking.openURL(phoneUrl);
+          showSuccess("Success", `Calling ${phoneNumber}`);
+          setContactVendorModalVisible(false);
+        } catch (tryError) {
+          showError("Error", "Cannot initiate call on this device");
+        }
+      }
+    } catch (error) {
+      showError("Error", "Failed to initiate call");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const handleSendSMS = async () => {
+    if (!selectedVendor?.phone) {
+      showError("Error", "Vendor phone number not available");
+      return;
+    }
+
+    if (!contactMessage.trim()) {
+      showError("Error", "Please enter a message");
+      return;
+    }
+
+    setSendingMessage(true);
+    let phoneNumber = selectedVendor.phone;
+    // Clean phone number - remove spaces, dashes, parentheses
+    phoneNumber = phoneNumber.replace(/[\s\-\(\)]/g, "");
+    const message = encodeURIComponent(contactMessage);
+    const smsUrl = `sms:${phoneNumber}?body=${message}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(smsUrl);
+      if (canOpen) {
+        await Linking.openURL(smsUrl);
+        showSuccess(
+          "Success",
+          `SMS sent to ${selectedVendor?.name || "vendor"}`,
+        );
+        setContactMessage("");
+        setContactVendorModalVisible(false);
+      } else {
+        // Try anyway - sometimes canOpenURL doesn't work but the actual SMS does
+        try {
+          await Linking.openURL(smsUrl);
+          showSuccess(
+            "Success",
+            `SMS sent to ${selectedVendor?.name || "vendor"}`,
+          );
+          setContactMessage("");
+          setContactVendorModalVisible(false);
+        } catch (tryError) {
+          showError("Error", "Cannot send SMS on this device");
+        }
+      }
+    } catch (error) {
+      showError("Error", "Failed to send SMS");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const handleSendVendorMessage = async () => {
+    if (contactMethod === "sms") {
+      await handleSendSMS();
+    } else if (contactMethod === "call") {
+      await handleCallVendor();
+    }
+  };
+
   const getPayoutStatusColor = (status) => {
     switch (status) {
       case "completed":
@@ -602,12 +687,14 @@ export default function VendorsManagementPage() {
         style={styles.scrollView}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }>
+        }
+      >
         {vendors.map((vendor) => (
           <TouchableOpacity
             key={vendor.id}
             style={styles.vendorCard}
-            onPress={() => handleViewVendorDetails(vendor)}>
+            onPress={() => handleViewVendorDetails(vendor)}
+          >
             <View style={styles.vendorMainInfo}>
               <View style={styles.vendorLeft}>
                 {vendor.image ? (
@@ -642,7 +729,8 @@ export default function VendorsManagementPage() {
                               ? colors.success + "20"
                               : colors.error + "20",
                         },
-                      ]}>
+                      ]}
+                    >
                       <Text
                         style={[
                           styles.statusBadgeText,
@@ -652,7 +740,8 @@ export default function VendorsManagementPage() {
                                 ? colors.success
                                 : colors.error,
                           },
-                        ]}>
+                        ]}
+                      >
                         {vendor.status === "active" ? "Active" : "Inactive"}
                       </Text>
                     </View>
@@ -672,7 +761,8 @@ export default function VendorsManagementPage() {
                   onPress={(e) => {
                     e.stopPropagation();
                     handleManageHours(vendor);
-                  }}>
+                  }}
+                >
                   <Ionicons
                     name="time-outline"
                     size={18}
@@ -684,23 +774,12 @@ export default function VendorsManagementPage() {
                   onPress={(e) => {
                     e.stopPropagation();
                     handleEdit(vendor);
-                  }}>
+                  }}
+                >
                   <Ionicons
                     name="pencil-outline"
                     size={18}
                     color={colors.textPrimary}
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionIconButton, styles.deleteIconButton]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleDelete(vendor);
-                  }}>
-                  <Ionicons
-                    name="trash-outline"
-                    size={18}
-                    color={colors.error}
                   />
                 </TouchableOpacity>
               </View>
@@ -714,7 +793,8 @@ export default function VendorsManagementPage() {
         visible={modalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setModalVisible(false)}>
+        onRequestClose={() => setModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
@@ -821,7 +901,8 @@ export default function VendorsManagementPage() {
                       onPress={() => {
                         setSelectedImageUri(null);
                         setFormData({ ...formData, image: "" });
-                      }}>
+                      }}
+                    >
                       <Text style={styles.removeImageText}>✕</Text>
                     </TouchableOpacity>
                   </View>
@@ -829,7 +910,8 @@ export default function VendorsManagementPage() {
                 <TouchableOpacity
                   style={styles.imagePickerButton}
                   onPress={pickImage}
-                  disabled={uploadingImage}>
+                  disabled={uploadingImage}
+                >
                   {uploadingImage ? (
                     <ActivityIndicator size="small" color={colors.primary} />
                   ) : (
@@ -860,12 +942,14 @@ export default function VendorsManagementPage() {
                           styles.tagChip,
                           isSelected && styles.tagChipSelected,
                         ]}
-                        onPress={() => toggleTag(tag)}>
+                        onPress={() => toggleTag(tag)}
+                      >
                         <Text
                           style={[
                             styles.tagText,
                             isSelected && styles.tagTextSelected,
-                          ]}>
+                          ]}
+                        >
                           {tag}
                         </Text>
                       </TouchableOpacity>
@@ -878,12 +962,14 @@ export default function VendorsManagementPage() {
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}>
+                onPress={() => setModalVisible(false)}
+              >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.saveButton]}
-                onPress={handleSave}>
+                onPress={handleSave}
+              >
                 <Text style={styles.saveButtonText}>Save</Text>
               </TouchableOpacity>
             </View>
@@ -896,7 +982,8 @@ export default function VendorsManagementPage() {
         visible={hoursModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setHoursModalVisible(false)}>
+        onRequestClose={() => setHoursModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
@@ -917,7 +1004,8 @@ export default function VendorsManagementPage() {
                       </Text>
                       <TouchableOpacity
                         style={styles.deleteHoursButton}
-                        onPress={() => handleDeleteHours(hours.id)}>
+                        onPress={() => handleDeleteHours(hours.id)}
+                      >
                         <Text style={styles.deleteHoursText}>✕</Text>
                       </TouchableOpacity>
                     </View>
@@ -964,7 +1052,8 @@ export default function VendorsManagementPage() {
                           handleUpdateHours(hours.id, {
                             is_closed: !hours.is_closed,
                           })
-                        }>
+                        }
+                      >
                         <Text style={styles.closedToggleText}>
                           {hours.is_closed ? "Closed" : "Open"}
                         </Text>
@@ -980,7 +1069,8 @@ export default function VendorsManagementPage() {
                       <TouchableOpacity
                         key={day}
                         style={styles.addDayButton}
-                        onPress={() => handleAddHours(day)}>
+                        onPress={() => handleAddHours(day)}
+                      >
                         <Text style={styles.addDayButtonText}>
                           + {getDayName(day)}
                         </Text>
@@ -994,7 +1084,8 @@ export default function VendorsManagementPage() {
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.closeButton]}
-                onPress={() => setHoursModalVisible(false)}>
+                onPress={() => setHoursModalVisible(false)}
+              >
                 <Text style={styles.saveButtonText}>Close</Text>
               </TouchableOpacity>
             </View>
@@ -1007,7 +1098,8 @@ export default function VendorsManagementPage() {
         visible={vendorDetailsModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setVendorDetailsModalVisible(false)}>
+        onRequestClose={() => setVendorDetailsModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -1015,7 +1107,8 @@ export default function VendorsManagementPage() {
                 {selectedVendor?.name} - Financial Details
               </Text>
               <TouchableOpacity
-                onPress={() => setVendorDetailsModalVisible(false)}>
+                onPress={() => setVendorDetailsModalVisible(false)}
+              >
                 <Text style={styles.closeText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -1109,7 +1202,8 @@ export default function VendorsManagementPage() {
                                 ? colors.success
                                 : colors.warning,
                             },
-                          ]}>
+                          ]}
+                        >
                           {bankDetails.is_verified
                             ? "Verified"
                             : "Not Verified"}
@@ -1121,7 +1215,8 @@ export default function VendorsManagementPage() {
                           bankDetails.is_verified && styles.unverifyButton,
                         ]}
                         onPress={handleVerifyBankDetails}
-                        disabled={verifyingBank}>
+                        disabled={verifyingBank}
+                      >
                         {verifyingBank ? (
                           <ActivityIndicator size="small" color="#fff" />
                         ) : (
@@ -1153,7 +1248,8 @@ export default function VendorsManagementPage() {
                   {bankDetails && bankDetails.is_verified && (
                     <TouchableOpacity
                       style={styles.createPayoutButton}
-                      onPress={() => setPayoutModalVisible(true)}>
+                      onPress={() => setPayoutModalVisible(true)}
+                    >
                       <Ionicons name="add-circle" size={20} color="#fff" />
                       <Text style={styles.createPayoutButtonText}>
                         Create Payout
@@ -1187,10 +1283,11 @@ export default function VendorsManagementPage() {
                               styles.statusBadge,
                               {
                                 backgroundColor: getPayoutStatusColor(
-                                  payout.status
+                                  payout.status,
                                 ),
                               },
-                            ]}>
+                            ]}
+                          >
                             <Text style={styles.statusBadgeText}>
                               {payout.status}
                             </Text>
@@ -1223,7 +1320,8 @@ export default function VendorsManagementPage() {
                             ]}
                             onPress={() =>
                               handleUpdatePayoutStatus(payout.id, "completed")
-                            }>
+                            }
+                          >
                             <Text style={styles.statusActionText}>
                               Mark as Complete
                             </Text>
@@ -1238,10 +1336,18 @@ export default function VendorsManagementPage() {
               </View>
             </ScrollView>
 
-            <View style={styles.modalActions}>
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.contactButton]}
+                onPress={handleContactVendor}
+              >
+                <Text style={styles.contactButtonText}>📞 Contact</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={[styles.modalButton, styles.closeButton]}
-                onPress={() => setVendorDetailsModalVisible(false)}>
+                onPress={() => setVendorDetailsModalVisible(false)}
+              >
                 <Text style={styles.saveButtonText}>Close</Text>
               </TouchableOpacity>
             </View>
@@ -1254,7 +1360,8 @@ export default function VendorsManagementPage() {
         visible={payoutModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setPayoutModalVisible(false)}>
+        onRequestClose={() => setPayoutModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -1290,17 +1397,141 @@ export default function VendorsManagementPage() {
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setPayoutModalVisible(false)}>
+                onPress={() => setPayoutModalVisible(false)}
+              >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.closeButton]}
                 onPress={handleCreatePayout}
-                disabled={creatingPayout}>
+                disabled={creatingPayout}
+              >
                 {creatingPayout ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.saveButtonText}>Create</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Contact Vendor Modal */}
+      <Modal
+        visible={contactVendorModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setContactVendorModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.contactModalContent}>
+            <Text style={styles.modalTitle}>
+              Contact {selectedVendor?.name || "Vendor"}
+            </Text>
+
+            <View style={styles.contactMethodContainer}>
+              <Text style={styles.contactLabel}>Choose Contact Method:</Text>
+              <View style={styles.methodButtonsRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.methodButton,
+                    contactMethod === "sms" && styles.methodButtonActive,
+                  ]}
+                  onPress={() => setContactMethod("sms")}
+                  disabled={sendingMessage}
+                >
+                  <Text
+                    style={[
+                      styles.methodButtonText,
+                      contactMethod === "sms" && styles.methodButtonTextActive,
+                    ]}
+                  >
+                    📱 SMS
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.methodButton,
+                    contactMethod === "call" && styles.methodButtonActive,
+                  ]}
+                  onPress={() => setContactMethod("call")}
+                  disabled={sendingMessage}
+                >
+                  <Text
+                    style={[
+                      styles.methodButtonText,
+                      contactMethod === "call" && styles.methodButtonTextActive,
+                    ]}
+                  >
+                    ☎️ Call
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.contactModalBody}>
+              {contactMethod === "sms" && (
+                <>
+                  <Text style={styles.contactLabel}>Message:</Text>
+                  <TextInput
+                    style={styles.messageInput}
+                    placeholder="Type your SMS message..."
+                    placeholderTextColor={colors.textMuted}
+                    multiline={true}
+                    numberOfLines={5}
+                    value={contactMessage}
+                    onChangeText={setContactMessage}
+                    editable={!sendingMessage}
+                  />
+                </>
+              )}
+
+              {contactMethod === "call" && (
+                <View style={styles.callInfoContainer}>
+                  <Text style={styles.callInfoText}>
+                    📞 Tap "Call Vendor" to initiate a phone call
+                  </Text>
+                  <Text style={styles.callInfoSubtext}>
+                    The vendor's phone will ring on your device
+                  </Text>
+                </View>
+              )}
+
+              <Text style={styles.vendorInfoText}>
+                Vendor: {selectedVendor?.name}
+              </Text>
+              {selectedVendor?.phone && (
+                <Text style={styles.vendorInfoText}>
+                  📞 {selectedVendor.phone}
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.contactButtonsContainer}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setContactVendorModalVisible(false)}
+                disabled={sendingMessage}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  sendingMessage && styles.sendButtonDisabled,
+                ]}
+                onPress={handleSendVendorMessage}
+                disabled={sendingMessage || !selectedVendor?.phone}
+              >
+                {sendingMessage ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.sendButtonText}>
+                    {contactMethod === "sms" ? "Send SMS" : "Call Vendor"}
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1523,7 +1754,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   closeButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   hoursScrollView: {
     maxHeight: 400,
@@ -1937,12 +2170,143 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   cancelButton: {
-    backgroundColor: colors.surface,
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.md,
+    backgroundColor: colors.card,
+    alignItems: "center",
     borderWidth: 1,
     borderColor: colors.border,
   },
   cancelButtonText: {
     color: colors.textPrimary,
     fontWeight: "600",
+  },
+
+  // Contact Vendor Styles
+  modalActionsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  contactButton: {
+    backgroundColor: colors.primary + "20",
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  contactButtonText: {
+    color: colors.primary,
+    fontWeight: "600",
+  },
+  contactModalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    margin: spacing.lg,
+    marginTop: spacing.xl * 2,
+  },
+  contactMethodContainer: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  methodButtonsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  methodButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: "center",
+  },
+  methodButtonActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + "15",
+  },
+  methodButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  methodButtonTextActive: {
+    color: colors.primary,
+  },
+  contactModalBody: {
+    marginVertical: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  contactLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
+  },
+  messageInput: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    color: colors.textPrimary,
+    fontSize: 14,
+    minHeight: 120,
+    textAlignVertical: "top",
+    marginBottom: spacing.lg,
+  },
+  callInfoContainer: {
+    backgroundColor: colors.primary + "10",
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.md,
+    marginBottom: spacing.lg,
+  },
+  callInfoText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.primary,
+    marginBottom: spacing.xs,
+  },
+  callInfoSubtext: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  vendorInfoText: {
+    fontSize: 13,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  contactButtonsContainer: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  sendButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.md,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendButtonDisabled: {
+    opacity: 0.6,
+  },
+  sendButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.white,
   },
 });

@@ -9,9 +9,11 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radii } from "../theme";
+import { supabase } from "../config/supabase";
 import {
   fetchAllUsers,
   fetchUserOrders,
@@ -33,6 +35,7 @@ export default function UsersManagementPage() {
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [roleFilter, setRoleFilter] = useState("all");
   const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const [adminLogins, setAdminLogins] = useState([]);
   const [updatingRole, setUpdatingRole] = useState(false);
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [pendingRoleChange, setPendingRoleChange] = useState(null);
@@ -49,6 +52,7 @@ export default function UsersManagementPage() {
   const [loadingPayouts, setLoadingPayouts] = useState(false);
   const [vendorId, setVendorId] = useState(null);
   const [verifyingBank, setVerifyingBank] = useState(false);
+  const [deviceTokens, setDeviceTokens] = useState([]);
 
   // Payout modal state
   const [payoutModalVisible, setPayoutModalVisible] = useState(false);
@@ -90,6 +94,7 @@ export default function UsersManagementPage() {
   };
 
   const handleViewUser = async (user) => {
+    console.log("Selected user data:", user);
     setSelectedUser(user);
     setModalVisible(true);
     setLoadingOrders(true);
@@ -99,6 +104,22 @@ export default function UsersManagementPage() {
     setBankDetails(null);
     setPayouts([]);
     setVendorId(null);
+    setDeviceTokens([]);
+
+    // Load device tokens
+    const { data: tokens, error: tokensError } = await supabase
+      .from("chawp_device_tokens")
+      .select("id, user_id, push_token, device_info, created_at, updated_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (tokens) {
+      console.log("Device tokens:", tokens);
+      setDeviceTokens(tokens);
+    }
+    if (tokensError) {
+      console.error("Error loading device tokens:", tokensError);
+    }
 
     // Load orders
     const result = await fetchUserOrders(user.id);
@@ -142,7 +163,7 @@ export default function UsersManagementPage() {
 
     const result = await verifyVendorBankDetails(
       bankDetails.id,
-      newVerifiedState
+      newVerifiedState,
     );
     if (result.success) {
       setBankDetails({
@@ -154,12 +175,12 @@ export default function UsersManagementPage() {
         "success",
         `Bank details ${
           newVerifiedState ? "verified" : "unverified"
-        } successfully`
+        } successfully`,
       );
     } else {
       showNotification(
         "error",
-        result.error || "Failed to update verification status"
+        result.error || "Failed to update verification status",
       );
     }
     setVerifyingBank(false);
@@ -206,14 +227,14 @@ export default function UsersManagementPage() {
       // Update local state
       setPayouts(
         payouts.map((p) =>
-          p.id === payoutId ? { ...p, status: newStatus } : p
-        )
+          p.id === payoutId ? { ...p, status: newStatus } : p,
+        ),
       );
       showNotification("success", "Payout status updated");
     } else {
       showNotification(
         "error",
-        result.error || "Failed to update payout status"
+        result.error || "Failed to update payout status",
       );
     }
   };
@@ -221,6 +242,13 @@ export default function UsersManagementPage() {
   const handleRoleChange = (newRole) => {
     if (!selectedUser || newRole === selectedUser.role) {
       setShowRoleMenu(false);
+      return;
+    }
+
+    // Prevent changing role for super_admin users
+    if (selectedUser.role === "super_admin") {
+      setShowRoleMenu(false);
+      showNotification("error", "Cannot change role for super admin users");
       return;
     }
 
@@ -242,8 +270,8 @@ export default function UsersManagementPage() {
       setSelectedUser({ ...selectedUser, role: pendingRoleChange });
       setUsers(
         users.map((u) =>
-          u.id === selectedUser.id ? { ...u, role: pendingRoleChange } : u
-        )
+          u.id === selectedUser.id ? { ...u, role: pendingRoleChange } : u,
+        ),
       );
       showNotification("success", "User role updated successfully");
     } else {
@@ -327,27 +355,26 @@ export default function UsersManagementPage() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Users ({filteredUsers.length})</Text>
-      </View>
-
       {/* Role Filter */}
       <ScrollView
         horizontal
         style={styles.filterContainer}
         contentContainerStyle={styles.filterContent}
-        showsHorizontalScrollIndicator={false}>
+        showsHorizontalScrollIndicator={false}
+      >
         <TouchableOpacity
           style={[
             styles.filterButton,
             roleFilter === "all" && styles.filterButtonActive,
           ]}
-          onPress={() => setRoleFilter("all")}>
+          onPress={() => setRoleFilter("all")}
+        >
           <Text
             style={[
               styles.filterText,
               roleFilter === "all" && styles.filterTextActive,
-            ]}>
+            ]}
+          >
             All
           </Text>
         </TouchableOpacity>
@@ -356,12 +383,14 @@ export default function UsersManagementPage() {
             styles.filterButton,
             roleFilter === "super_admin" && styles.filterButtonActive,
           ]}
-          onPress={() => setRoleFilter("super_admin")}>
+          onPress={() => setRoleFilter("super_admin")}
+        >
           <Text
             style={[
               styles.filterText,
               roleFilter === "super_admin" && styles.filterTextActive,
-            ]}>
+            ]}
+          >
             Super Admin
           </Text>
         </TouchableOpacity>
@@ -370,12 +399,14 @@ export default function UsersManagementPage() {
             styles.filterButton,
             roleFilter === "admin" && styles.filterButtonActive,
           ]}
-          onPress={() => setRoleFilter("admin")}>
+          onPress={() => setRoleFilter("admin")}
+        >
           <Text
             style={[
               styles.filterText,
               roleFilter === "admin" && styles.filterTextActive,
-            ]}>
+            ]}
+          >
             Admin
           </Text>
         </TouchableOpacity>
@@ -384,12 +415,14 @@ export default function UsersManagementPage() {
             styles.filterButton,
             roleFilter === "vendor" && styles.filterButtonActive,
           ]}
-          onPress={() => setRoleFilter("vendor")}>
+          onPress={() => setRoleFilter("vendor")}
+        >
           <Text
             style={[
               styles.filterText,
               roleFilter === "vendor" && styles.filterTextActive,
-            ]}>
+            ]}
+          >
             Vendor
           </Text>
         </TouchableOpacity>
@@ -398,12 +431,14 @@ export default function UsersManagementPage() {
             styles.filterButton,
             roleFilter === "delivery" && styles.filterButtonActive,
           ]}
-          onPress={() => setRoleFilter("delivery")}>
+          onPress={() => setRoleFilter("delivery")}
+        >
           <Text
             style={[
               styles.filterText,
               roleFilter === "delivery" && styles.filterTextActive,
-            ]}>
+            ]}
+          >
             Delivery
           </Text>
         </TouchableOpacity>
@@ -412,12 +447,14 @@ export default function UsersManagementPage() {
             styles.filterButton,
             roleFilter === "user" && styles.filterButtonActive,
           ]}
-          onPress={() => setRoleFilter("user")}>
+          onPress={() => setRoleFilter("user")}
+        >
           <Text
             style={[
               styles.filterText,
               roleFilter === "user" && styles.filterTextActive,
-            ]}>
+            ]}
+          >
             User
           </Text>
         </TouchableOpacity>
@@ -427,19 +464,30 @@ export default function UsersManagementPage() {
         style={styles.scrollView}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }>
+        }
+      >
+        {/* Users List */}
         {filteredUsers.map((user) => (
           <TouchableOpacity
             key={user.id}
             style={styles.userCard}
-            onPress={() => handleViewUser(user)}>
+            onPress={() => handleViewUser(user)}
+          >
             <View style={styles.userInfo}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {(user.full_name || user.username || "U")
-                    .charAt(0)
-                    .toUpperCase()}
-                </Text>
+                {user.avatar_url ? (
+                  <Image
+                    source={{ uri: user.avatar_url }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>
+                    {(user.full_name || user.username || "U")
+                      .charAt(0)
+                      .toUpperCase()}
+                  </Text>
+                )}
               </View>
               <View style={styles.userDetails}>
                 <View style={styles.userNameRow}>
@@ -451,12 +499,14 @@ export default function UsersManagementPage() {
                       style={[
                         styles.roleBadge,
                         { backgroundColor: getRoleColor(user.role) + "20" },
-                      ]}>
+                      ]}
+                    >
                       <Text
                         style={[
                           styles.roleText,
                           { color: getRoleColor(user.role) },
-                        ]}>
+                        ]}
+                      >
                         {getRoleLabel(user.role)}
                       </Text>
                     </View>
@@ -491,7 +541,8 @@ export default function UsersManagementPage() {
         visible={modalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setModalVisible(false)}>
+        onRequestClose={() => setModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>User Details</Text>
@@ -499,11 +550,19 @@ export default function UsersManagementPage() {
             {selectedUser && (
               <ScrollView style={styles.modalBody}>
                 <View style={styles.modalAvatar}>
-                  <Text style={styles.modalAvatarText}>
-                    {(selectedUser.full_name || selectedUser.username || "U")
-                      .charAt(0)
-                      .toUpperCase()}
-                  </Text>
+                  {selectedUser.avatar_url ? (
+                    <Image
+                      source={{ uri: selectedUser.avatar_url }}
+                      style={styles.modalAvatarImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={styles.modalAvatarText}>
+                      {(selectedUser.full_name || selectedUser.username || "U")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.detailSection}>
@@ -532,7 +591,10 @@ export default function UsersManagementPage() {
                   <TouchableOpacity
                     style={styles.roleSelector}
                     onPress={() => setShowRoleMenu(!showRoleMenu)}
-                    disabled={updatingRole}>
+                    disabled={
+                      updatingRole || selectedUser.role === "super_admin"
+                    }
+                  >
                     <View
                       style={[
                         styles.roleChip,
@@ -540,12 +602,14 @@ export default function UsersManagementPage() {
                           backgroundColor:
                             getRoleColor(selectedUser.role) + "20",
                         },
-                      ]}>
+                      ]}
+                    >
                       <Text
                         style={[
                           styles.roleChipText,
                           { color: getRoleColor(selectedUser.role) },
-                        ]}>
+                        ]}
+                      >
                         {getRoleLabel(selectedUser.role)}
                       </Text>
                     </View>
@@ -558,13 +622,7 @@ export default function UsersManagementPage() {
 
                   {showRoleMenu && (
                     <View style={styles.roleMenu}>
-                      {[
-                        "user",
-                        "delivery",
-                        "vendor",
-                        "admin",
-                        "super_admin",
-                      ].map((role) => (
+                      {["user", "delivery", "vendor", "admin"].map((role) => (
                         <TouchableOpacity
                           key={role}
                           style={[
@@ -572,7 +630,8 @@ export default function UsersManagementPage() {
                             selectedUser.role === role &&
                               styles.roleMenuItemActive,
                           ]}
-                          onPress={() => handleRoleChange(role)}>
+                          onPress={() => handleRoleChange(role)}
+                        >
                           <View
                             style={[
                               styles.roleMenuDot,
@@ -584,7 +643,8 @@ export default function UsersManagementPage() {
                               styles.roleMenuText,
                               selectedUser.role === role &&
                                 styles.roleMenuTextActive,
-                            ]}>
+                            ]}
+                          >
                             {getRoleLabel(role)}
                           </Text>
                           {selectedUser.role === role && (
@@ -619,6 +679,76 @@ export default function UsersManagementPage() {
                   <Text style={styles.detailValue}>
                     {new Date(selectedUser.created_at).toLocaleString()}
                   </Text>
+                </View>
+
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Device Information</Text>
+                  {deviceTokens.length > 0 ? (
+                    deviceTokens.map((token, index) => {
+                      const deviceInfo = token.device_info
+                        ? typeof token.device_info === "string"
+                          ? JSON.parse(token.device_info)
+                          : token.device_info
+                        : {};
+
+                      return (
+                        <View
+                          key={token.id}
+                          style={[
+                            styles.deviceCard,
+                            index > 0 && { marginTop: spacing.md },
+                          ]}
+                        >
+                          {index > 0 && (
+                            <Text style={styles.deviceNumber}>
+                              Device {index + 1}
+                            </Text>
+                          )}
+                          {deviceInfo.deviceName && (
+                            <Text style={styles.detailValue}>
+                              📱 {deviceInfo.deviceName}
+                            </Text>
+                          )}
+                          {deviceInfo.platform && (
+                            <Text style={styles.detailValue}>
+                              💻 Platform: {deviceInfo.platform}
+                            </Text>
+                          )}
+                          {deviceInfo.osVersion && (
+                            <Text style={styles.detailValue}>
+                              🔧 OS: {deviceInfo.osVersion}
+                            </Text>
+                          )}
+                          {deviceInfo.appVersion && (
+                            <Text style={styles.detailValue}>
+                              📦 App: {deviceInfo.appVersion}
+                            </Text>
+                          )}
+                          {deviceInfo.manufacturer && (
+                            <Text style={styles.detailValue}>
+                              🏭 {deviceInfo.manufacturer}
+                            </Text>
+                          )}
+                          {deviceInfo.modelName && (
+                            <Text style={styles.detailValue}>
+                              📲 Model: {deviceInfo.modelName}
+                            </Text>
+                          )}
+                          <Text style={styles.detailValue}>
+                            🔔 Push: {token.push_token ? "Enabled" : "Disabled"}
+                          </Text>
+                          <Text style={styles.deviceDate}>
+                            Registered:{" "}
+                            {new Date(token.created_at).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  ) : (
+                    <Text style={styles.emptyText}>
+                      No device info available
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.detailSection}>
@@ -664,7 +794,8 @@ export default function UsersManagementPage() {
 
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={() => setModalVisible(false)}>
+              onPress={() => setModalVisible(false)}
+            >
               <Text style={styles.closeButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
@@ -676,7 +807,8 @@ export default function UsersManagementPage() {
         visible={confirmModalVisible}
         animationType="fade"
         transparent={true}
-        onRequestClose={() => setConfirmModalVisible(false)}>
+        onRequestClose={() => setConfirmModalVisible(false)}
+      >
         <View style={styles.confirmOverlay}>
           <View style={styles.confirmBox}>
             <View style={styles.confirmIconContainer}>
@@ -706,12 +838,14 @@ export default function UsersManagementPage() {
                 onPress={() => {
                   setConfirmModalVisible(false);
                   setPendingRoleChange(null);
-                }}>
+                }}
+              >
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.confirmButton}
-                onPress={confirmRoleChange}>
+                onPress={confirmRoleChange}
+              >
                 <Text style={styles.confirmButtonText}>Confirm</Text>
               </TouchableOpacity>
             </View>
@@ -724,7 +858,8 @@ export default function UsersManagementPage() {
         visible={payoutModalVisible}
         animationType="fade"
         transparent={true}
-        onRequestClose={() => setPayoutModalVisible(false)}>
+        onRequestClose={() => setPayoutModalVisible(false)}
+      >
         <View style={styles.centeredModalOverlay}>
           <View style={styles.payoutModalContent}>
             <Text style={[styles.modalTitle, { color: "#FFFFFF" }]}>
@@ -789,7 +924,8 @@ export default function UsersManagementPage() {
                   setPayoutModalVisible(false);
                   setPayoutAmount("");
                   setPayoutNotes("");
-                }}>
+                }}
+              >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -803,7 +939,8 @@ export default function UsersManagementPage() {
                   creatingPayout ||
                   !payoutAmount ||
                   parseFloat(payoutAmount) <= 0
-                }>
+                }
+              >
                 {creatingPayout ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
@@ -823,7 +960,8 @@ export default function UsersManagementPage() {
             notification.type === "success"
               ? styles.notificationSuccess
               : styles.notificationError,
-          ]}>
+          ]}
+        >
           <Ionicons
             name={
               notification.type === "success"
@@ -867,6 +1005,36 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     maxHeight: 50,
+  },
+  tabContainer: {
+    flexDirection: "row",
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+    borderBottomWidth: 3,
+    borderBottomColor: "transparent",
+  },
+  tabActive: {
+    borderBottomColor: colors.primary,
+  },
+  tabText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  tabTextActive: {
+    color: colors.primary,
+  },
+  lastLoginText: {
+    fontSize: 12,
+    color: colors.success,
+    marginTop: spacing.xs / 2,
+    fontWeight: "500",
   },
   filterContent: {
     flexDirection: "row",
@@ -930,6 +1098,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: spacing.md,
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarText: {
     fontSize: 20,
@@ -950,6 +1123,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     color: colors.textPrimary,
+  },
+  userRole: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.primary,
+    marginTop: spacing.xs / 2,
+    textTransform: "capitalize",
+  },
+  userEmail: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: spacing.xs / 2,
   },
   roleBadge: {
     paddingHorizontal: spacing.sm,
@@ -1011,17 +1196,22 @@ const styles = StyleSheet.create({
     maxHeight: 500,
   },
   modalAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: "100%",
+    height: 200,
+    borderRadius: radii.lg,
     backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
     alignSelf: "center",
     marginBottom: spacing.xl,
+    overflow: "hidden",
+  },
+  modalAvatarImage: {
+    width: "100%",
+    height: "100%",
   },
   modalAvatarText: {
-    fontSize: 32,
+    fontSize: 72,
     fontWeight: "bold",
     color: colors.white,
   },
@@ -1038,6 +1228,24 @@ const styles = StyleSheet.create({
   detailValue: {
     fontSize: 16,
     color: colors.textPrimary,
+  },
+  deviceCard: {
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  deviceNumber: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.primary,
+    marginBottom: spacing.xs,
+  },
+  deviceDate: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
   },
   ordersList: {
     marginTop: spacing.md,

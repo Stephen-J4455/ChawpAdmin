@@ -66,20 +66,22 @@ export default function Notification({
   }, [visible]);
 
   const handleClose = () => {
+    // Close immediately to prevent blocking UI interactions
+    if (onClose) onClose();
+
+    // Quick animation for smooth dismissal
     Animated.parallel([
       Animated.timing(slideAnim, {
         toValue: -200,
-        duration: 300,
+        duration: 150,
         useNativeDriver: true,
       }),
       Animated.timing(opacityAnim, {
         toValue: 0,
-        duration: 300,
+        duration: 150,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      if (onClose) onClose();
-    });
+    ]).start();
   };
 
   const getTypeConfig = () => {
@@ -118,86 +120,109 @@ export default function Notification({
 
   const typeConfig = getTypeConfig();
 
+  if (!visible) {
+    return null;
+  }
+
   return (
     <Modal
       visible={visible}
       transparent={true}
       animationType="none"
       statusBarTranslucent={true}
-      onRequestClose={handleClose}>
-      <Animated.View
-        style={[
-          styles.overlay,
-          {
-            opacity: opacityAnim,
-          },
-        ]}>
+      onRequestClose={handleClose}
+    >
+      <TouchableOpacity
+        style={{ flex: 1 }}
+        activeOpacity={1}
+        onPress={handleClose}
+      >
         <Animated.View
           style={[
-            styles.container,
+            styles.overlay,
             {
-              backgroundColor: typeConfig.bgColor,
-              borderLeftColor: typeConfig.borderColor,
-              transform: [{ translateY: slideAnim }],
+              opacity: opacityAnim,
             },
-          ]}>
-          <View style={styles.content}>
-            <View
+          ]}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Animated.View
               style={[
-                styles.iconContainer,
-                { backgroundColor: typeConfig.color },
-              ]}>
-              <Text style={styles.icon}>{typeConfig.icon}</Text>
-            </View>
-
-            <View style={styles.textContainer}>
-              {title && (
-                <Text style={[styles.title, { color: typeConfig.color }]}>
-                  {title}
-                </Text>
-              )}
-              {message && <Text style={styles.message}>{message}</Text>}
-
-              {actions.length > 0 && (
-                <View style={styles.actionsContainer}>
-                  {actions.map((action, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.actionButton,
-                        action.style === "destructive" &&
-                          styles.destructiveButton,
-                        action.style === "cancel" && styles.cancelButton,
-                      ]}
-                      onPress={() => {
-                        if (action.onPress) action.onPress();
-                        handleClose();
-                      }}>
-                      <Text
-                        style={[
-                          styles.actionButtonText,
-                          action.style === "destructive" &&
-                            styles.destructiveButtonText,
-                          action.style === "cancel" && styles.cancelButtonText,
-                        ]}>
-                        {action.text}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                styles.container,
+                {
+                  backgroundColor: typeConfig.bgColor,
+                  borderLeftColor: typeConfig.borderColor,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
+            >
+              <View style={styles.content}>
+                <View
+                  style={[
+                    styles.iconContainer,
+                    { backgroundColor: typeConfig.color },
+                  ]}
+                >
+                  <Text style={styles.icon}>{typeConfig.icon}</Text>
                 </View>
-              )}
-            </View>
 
-            {actions.length === 0 && (
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={handleClose}>
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+                <View style={styles.textContainer}>
+                  {title && (
+                    <Text style={[styles.title, { color: typeConfig.color }]}>
+                      {title}
+                    </Text>
+                  )}
+                  {message && <Text style={styles.message}>{message}</Text>}
+
+                  {actions.length > 0 && (
+                    <View style={styles.actionsContainer}>
+                      {actions.map((action, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          style={[
+                            styles.actionButton,
+                            action.style === "destructive" &&
+                              styles.destructiveButton,
+                            action.style === "cancel" && styles.cancelButton,
+                          ]}
+                          onPress={() => {
+                            if (action.onPress) action.onPress();
+                            handleClose();
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.actionButtonText,
+                              action.style === "destructive" &&
+                                styles.destructiveButtonText,
+                              action.style === "cancel" &&
+                                styles.cancelButtonText,
+                            ]}
+                          >
+                            {action.text}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {actions.length === 0 && (
+                  <TouchableOpacity
+                    style={styles.closeButton}
+                    onPress={handleClose}
+                  >
+                    <Text style={styles.closeButtonText}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </Animated.View>
+          </TouchableOpacity>
         </Animated.View>
-      </Animated.View>
+      </TouchableOpacity>
     </Modal>
   );
 }
