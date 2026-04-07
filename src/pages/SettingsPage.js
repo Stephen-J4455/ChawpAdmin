@@ -23,9 +23,44 @@ export default function SettingsPage() {
   const [serviceFeePercentage, setServiceFeePercentage] = useState("0");
   const [deliveryFee, setDeliveryFee] = useState("5");
   const [payAfterDeliveryEnabled, setPayAfterDeliveryEnabled] = useState(false);
+  const [versionControl, setVersionControl] = useState({
+    chawp: {
+      androidMinVersion: "1.0.0",
+      iosMinVersion: "1.0.0",
+      androidStoreUrl: "",
+      iosStoreUrl: "",
+      releaseNote: "",
+    },
+    vendor: {
+      androidMinVersion: "1.0.0",
+      iosMinVersion: "1.0.0",
+      androidStoreUrl: "",
+      iosStoreUrl: "",
+      releaseNote: "",
+    },
+    delivery: {
+      androidMinVersion: "1.0.0",
+      iosMinVersion: "1.0.0",
+      androidStoreUrl: "",
+      iosStoreUrl: "",
+      releaseNote: "",
+    },
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  const isValidVersion = (value) => /^\d+(\.\d+){0,2}$/.test(value.trim());
+
+  const updateVersionField = (appKey, platformKey, value) => {
+    setVersionControl((prev) => ({
+      ...prev,
+      [appKey]: {
+        ...prev[appKey],
+        [platformKey]: value,
+      },
+    }));
+  };
 
   useEffect(() => {
     loadSettings();
@@ -41,6 +76,31 @@ export default function SettingsPage() {
       setServiceFeeMode(settings.serviceFeeMode || "flat");
       setServiceFeePercentage(String(settings.serviceFeePercentage || 0));
       setPayAfterDeliveryEnabled(Boolean(settings.payAfterDeliveryEnabled));
+      setVersionControl(
+        settings.versionControl || {
+          chawp: {
+            androidMinVersion: "1.0.0",
+            iosMinVersion: "1.0.0",
+            androidStoreUrl: "",
+            iosStoreUrl: "",
+            releaseNote: "",
+          },
+          vendor: {
+            androidMinVersion: "1.0.0",
+            iosMinVersion: "1.0.0",
+            androidStoreUrl: "",
+            iosStoreUrl: "",
+            releaseNote: "",
+          },
+          delivery: {
+            androidMinVersion: "1.0.0",
+            iosMinVersion: "1.0.0",
+            androidStoreUrl: "",
+            iosStoreUrl: "",
+            releaseNote: "",
+          },
+        },
+      );
     } catch (err) {
       setError(err.message || "Failed to load settings");
       console.error("Error loading settings:", err);
@@ -80,6 +140,27 @@ export default function SettingsPage() {
         return;
       }
 
+      const versionEntries = [
+        ["Chawp Android", versionControl.chawp.androidMinVersion],
+        ["Chawp iOS", versionControl.chawp.iosMinVersion],
+        ["Vendor Android", versionControl.vendor.androidMinVersion],
+        ["Vendor iOS", versionControl.vendor.iosMinVersion],
+        ["Delivery Android", versionControl.delivery.androidMinVersion],
+        ["Delivery iOS", versionControl.delivery.iosMinVersion],
+      ];
+
+      const invalidVersion = versionEntries.find(
+        ([, value]) => !isValidVersion(value || ""),
+      );
+
+      if (invalidVersion) {
+        Alert.alert(
+          "Invalid Version",
+          `${invalidVersion[0]} minimum version must use format like 1.0.0`,
+        );
+        return;
+      }
+
       setSaving(true);
       setError(null);
 
@@ -90,6 +171,7 @@ export default function SettingsPage() {
         serviceFeePercentage:
           serviceFeeMode === "percentage" ? serviceFeePercentageNum : 0,
         payAfterDeliveryEnabled,
+        versionControl,
       });
 
       Alert.alert("Success", "Settings updated successfully");
@@ -141,7 +223,9 @@ export default function SettingsPage() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>App Settings</Text>
-        <Text style={styles.subtitle}>Configure delivery and service fees</Text>
+        <Text style={styles.subtitle}>
+          Configure fees and minimum supported app versions
+        </Text>
       </View>
 
       {error && (
@@ -306,6 +390,251 @@ export default function SettingsPage() {
             />
             <Text style={styles.currencySymbol}>GH₵</Text>
           </View>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Mobile App Version Control</Text>
+
+        <View style={styles.settingItem}>
+          <Text style={styles.settingLabel}>Chawp</Text>
+          <View style={styles.versionRow}>
+            <View style={styles.versionInputWrapper}>
+              <Text style={styles.versionLabel}>Android min</Text>
+              <TextInput
+                style={styles.input}
+                value={versionControl.chawp.androidMinVersion}
+                onChangeText={(value) =>
+                  updateVersionField("chawp", "androidMinVersion", value)
+                }
+                placeholder="1.0.0"
+                editable={!saving}
+                autoCapitalize="none"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+            <View style={styles.versionInputWrapper}>
+              <Text style={styles.versionLabel}>iOS min</Text>
+              <TextInput
+                style={styles.input}
+                value={versionControl.chawp.iosMinVersion}
+                onChangeText={(value) =>
+                  updateVersionField("chawp", "iosMinVersion", value)
+                }
+                placeholder="1.0.0"
+                editable={!saving}
+                autoCapitalize="none"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+          </View>
+          <View style={styles.versionInputWrapper}>
+            <Text style={styles.versionLabel}>Android store URL</Text>
+            <TextInput
+              style={styles.input}
+              value={versionControl.chawp.androidStoreUrl}
+              onChangeText={(value) =>
+                updateVersionField("chawp", "androidStoreUrl", value)
+              }
+              placeholder="https://play.google.com/..."
+              editable={!saving}
+              autoCapitalize="none"
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+          <View style={styles.versionInputWrapper}>
+            <Text style={styles.versionLabel}>iOS store URL</Text>
+            <TextInput
+              style={styles.input}
+              value={versionControl.chawp.iosStoreUrl}
+              onChangeText={(value) =>
+                updateVersionField("chawp", "iosStoreUrl", value)
+              }
+              placeholder="https://apps.apple.com/..."
+              editable={!saving}
+              autoCapitalize="none"
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+          <View style={styles.versionInputWrapper}>
+            <Text style={styles.versionLabel}>Release note</Text>
+            <TextInput
+              style={[styles.input, styles.noteInput]}
+              value={versionControl.chawp.releaseNote}
+              onChangeText={(value) =>
+                updateVersionField("chawp", "releaseNote", value)
+              }
+              placeholder="What's new in this required update"
+              editable={!saving}
+              multiline
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+        </View>
+
+        <View style={styles.settingItem}>
+          <Text style={styles.settingLabel}>Vendor</Text>
+          <View style={styles.versionRow}>
+            <View style={styles.versionInputWrapper}>
+              <Text style={styles.versionLabel}>Android min</Text>
+              <TextInput
+                style={styles.input}
+                value={versionControl.vendor.androidMinVersion}
+                onChangeText={(value) =>
+                  updateVersionField("vendor", "androidMinVersion", value)
+                }
+                placeholder="1.0.0"
+                editable={!saving}
+                autoCapitalize="none"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+            <View style={styles.versionInputWrapper}>
+              <Text style={styles.versionLabel}>iOS min</Text>
+              <TextInput
+                style={styles.input}
+                value={versionControl.vendor.iosMinVersion}
+                onChangeText={(value) =>
+                  updateVersionField("vendor", "iosMinVersion", value)
+                }
+                placeholder="1.0.0"
+                editable={!saving}
+                autoCapitalize="none"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+          </View>
+          <View style={styles.versionInputWrapper}>
+            <Text style={styles.versionLabel}>Android store URL</Text>
+            <TextInput
+              style={styles.input}
+              value={versionControl.vendor.androidStoreUrl}
+              onChangeText={(value) =>
+                updateVersionField("vendor", "androidStoreUrl", value)
+              }
+              placeholder="https://play.google.com/..."
+              editable={!saving}
+              autoCapitalize="none"
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+          <View style={styles.versionInputWrapper}>
+            <Text style={styles.versionLabel}>iOS store URL</Text>
+            <TextInput
+              style={styles.input}
+              value={versionControl.vendor.iosStoreUrl}
+              onChangeText={(value) =>
+                updateVersionField("vendor", "iosStoreUrl", value)
+              }
+              placeholder="https://apps.apple.com/..."
+              editable={!saving}
+              autoCapitalize="none"
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+          <View style={styles.versionInputWrapper}>
+            <Text style={styles.versionLabel}>Release note</Text>
+            <TextInput
+              style={[styles.input, styles.noteInput]}
+              value={versionControl.vendor.releaseNote}
+              onChangeText={(value) =>
+                updateVersionField("vendor", "releaseNote", value)
+              }
+              placeholder="What's new in this required update"
+              editable={!saving}
+              multiline
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+        </View>
+
+        <View style={styles.settingItem}>
+          <Text style={styles.settingLabel}>Delivery</Text>
+          <View style={styles.versionRow}>
+            <View style={styles.versionInputWrapper}>
+              <Text style={styles.versionLabel}>Android min</Text>
+              <TextInput
+                style={styles.input}
+                value={versionControl.delivery.androidMinVersion}
+                onChangeText={(value) =>
+                  updateVersionField("delivery", "androidMinVersion", value)
+                }
+                placeholder="1.0.0"
+                editable={!saving}
+                autoCapitalize="none"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+            <View style={styles.versionInputWrapper}>
+              <Text style={styles.versionLabel}>iOS min</Text>
+              <TextInput
+                style={styles.input}
+                value={versionControl.delivery.iosMinVersion}
+                onChangeText={(value) =>
+                  updateVersionField("delivery", "iosMinVersion", value)
+                }
+                placeholder="1.0.0"
+                editable={!saving}
+                autoCapitalize="none"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+          </View>
+          <View style={styles.versionInputWrapper}>
+            <Text style={styles.versionLabel}>Android store URL</Text>
+            <TextInput
+              style={styles.input}
+              value={versionControl.delivery.androidStoreUrl}
+              onChangeText={(value) =>
+                updateVersionField("delivery", "androidStoreUrl", value)
+              }
+              placeholder="https://play.google.com/..."
+              editable={!saving}
+              autoCapitalize="none"
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+          <View style={styles.versionInputWrapper}>
+            <Text style={styles.versionLabel}>iOS store URL</Text>
+            <TextInput
+              style={styles.input}
+              value={versionControl.delivery.iosStoreUrl}
+              onChangeText={(value) =>
+                updateVersionField("delivery", "iosStoreUrl", value)
+              }
+              placeholder="https://apps.apple.com/..."
+              editable={!saving}
+              autoCapitalize="none"
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+          <View style={styles.versionInputWrapper}>
+            <Text style={styles.versionLabel}>Release note</Text>
+            <TextInput
+              style={[styles.input, styles.noteInput]}
+              value={versionControl.delivery.releaseNote}
+              onChangeText={(value) =>
+                updateVersionField("delivery", "releaseNote", value)
+              }
+              placeholder="What's new in this required update"
+              editable={!saving}
+              multiline
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+        </View>
+
+        <View style={styles.infoBox}>
+          <Ionicons
+            name="information-circle"
+            size={20}
+            color={colors.primary}
+            style={styles.infoIcon}
+          />
+          <Text style={styles.infoText}>
+            Devices running versions below these values will be blocked and
+            required to update.
+          </Text>
         </View>
       </View>
 
@@ -487,6 +816,25 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: spacing.xs,
+  },
+  versionRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  versionInputWrapper: {
+    flex: 1,
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  versionLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
+  noteInput: {
+    minHeight: 68,
+    textAlignVertical: "top",
+    paddingTop: spacing.md,
   },
   feeModeRow: {
     flexDirection: "row",

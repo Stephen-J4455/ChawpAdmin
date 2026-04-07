@@ -2690,7 +2690,7 @@ export async function fetchAppSettings() {
     const { data, error } = await supabase
       .from("chawp_app_settings")
       .select(
-        "service_fee, delivery_fee, service_fee_mode, service_fee_percentage, pay_after_delivery_enabled",
+        "service_fee, delivery_fee, service_fee_mode, service_fee_percentage, pay_after_delivery_enabled, chawp_min_android_version, chawp_min_ios_version, chawp_android_store_url, chawp_ios_store_url, chawp_release_note, vendor_min_android_version, vendor_min_ios_version, vendor_android_store_url, vendor_ios_store_url, vendor_release_note, delivery_min_android_version, delivery_min_ios_version, delivery_android_store_url, delivery_ios_store_url, delivery_release_note",
       )
       .order("id", { ascending: true })
       .limit(1)
@@ -2705,6 +2705,29 @@ export async function fetchAppSettings() {
         serviceFeeMode: "flat",
         serviceFeePercentage: 0,
         payAfterDeliveryEnabled: false,
+        versionControl: {
+          chawp: {
+            androidMinVersion: "1.0.0",
+            iosMinVersion: "1.0.0",
+            androidStoreUrl: "",
+            iosStoreUrl: "",
+            releaseNote: "",
+          },
+          vendor: {
+            androidMinVersion: "1.0.0",
+            iosMinVersion: "1.0.0",
+            androidStoreUrl: "",
+            iosStoreUrl: "",
+            releaseNote: "",
+          },
+          delivery: {
+            androidMinVersion: "1.0.0",
+            iosMinVersion: "1.0.0",
+            androidStoreUrl: "",
+            iosStoreUrl: "",
+            releaseNote: "",
+          },
+        },
       };
     }
 
@@ -2715,6 +2738,29 @@ export async function fetchAppSettings() {
         data.service_fee_mode === "percentage" ? "percentage" : "flat",
       serviceFeePercentage: parseFloat(data.service_fee_percentage) || 0,
       payAfterDeliveryEnabled: Boolean(data.pay_after_delivery_enabled),
+      versionControl: {
+        chawp: {
+          androidMinVersion: data.chawp_min_android_version || "1.0.0",
+          iosMinVersion: data.chawp_min_ios_version || "1.0.0",
+          androidStoreUrl: data.chawp_android_store_url || "",
+          iosStoreUrl: data.chawp_ios_store_url || "",
+          releaseNote: data.chawp_release_note || "",
+        },
+        vendor: {
+          androidMinVersion: data.vendor_min_android_version || "1.0.0",
+          iosMinVersion: data.vendor_min_ios_version || "1.0.0",
+          androidStoreUrl: data.vendor_android_store_url || "",
+          iosStoreUrl: data.vendor_ios_store_url || "",
+          releaseNote: data.vendor_release_note || "",
+        },
+        delivery: {
+          androidMinVersion: data.delivery_min_android_version || "1.0.0",
+          iosMinVersion: data.delivery_min_ios_version || "1.0.0",
+          androidStoreUrl: data.delivery_android_store_url || "",
+          iosStoreUrl: data.delivery_ios_store_url || "",
+          releaseNote: data.delivery_release_note || "",
+        },
+      },
     };
   } catch (error) {
     console.error("Error fetching app settings:", error);
@@ -2725,6 +2771,29 @@ export async function fetchAppSettings() {
       serviceFeeMode: "flat",
       serviceFeePercentage: 0,
       payAfterDeliveryEnabled: false,
+      versionControl: {
+        chawp: {
+          androidMinVersion: "1.0.0",
+          iosMinVersion: "1.0.0",
+          androidStoreUrl: "",
+          iosStoreUrl: "",
+          releaseNote: "",
+        },
+        vendor: {
+          androidMinVersion: "1.0.0",
+          iosMinVersion: "1.0.0",
+          androidStoreUrl: "",
+          iosStoreUrl: "",
+          releaseNote: "",
+        },
+        delivery: {
+          androidMinVersion: "1.0.0",
+          iosMinVersion: "1.0.0",
+          androidStoreUrl: "",
+          iosStoreUrl: "",
+          releaseNote: "",
+        },
+      },
     };
   }
 }
@@ -2739,6 +2808,13 @@ export async function updateAppSettings(settings) {
       settings.serviceFeePercentage,
     );
     const payAfterDeliveryEnabled = Boolean(settings.payAfterDeliveryEnabled);
+    const versionControl = settings.versionControl || {};
+    const normalizeVersion = (value) =>
+      String(value || "")
+        .trim()
+        .replace(/[^0-9.]/g, "") || "1.0.0";
+    const normalizeUrl = (value) => String(value || "").trim();
+    const normalizeNote = (value) => String(value || "").trim();
     const normalizedServiceFeePercentage =
       Number.isFinite(parsedServiceFeePercentage) &&
       parsedServiceFeePercentage >= 0
@@ -2756,6 +2832,47 @@ export async function updateAppSettings(settings) {
           service_fee_mode: serviceFeeMode,
           service_fee_percentage: normalizedServiceFeePercentage,
           pay_after_delivery_enabled: payAfterDeliveryEnabled,
+          chawp_min_android_version: normalizeVersion(
+            versionControl?.chawp?.androidMinVersion,
+          ),
+          chawp_min_ios_version: normalizeVersion(
+            versionControl?.chawp?.iosMinVersion,
+          ),
+          vendor_min_android_version: normalizeVersion(
+            versionControl?.vendor?.androidMinVersion,
+          ),
+          vendor_min_ios_version: normalizeVersion(
+            versionControl?.vendor?.iosMinVersion,
+          ),
+          delivery_min_android_version: normalizeVersion(
+            versionControl?.delivery?.androidMinVersion,
+          ),
+          delivery_min_ios_version: normalizeVersion(
+            versionControl?.delivery?.iosMinVersion,
+          ),
+          chawp_android_store_url: normalizeUrl(
+            versionControl?.chawp?.androidStoreUrl,
+          ),
+          chawp_ios_store_url: normalizeUrl(versionControl?.chawp?.iosStoreUrl),
+          chawp_release_note: normalizeNote(versionControl?.chawp?.releaseNote),
+          vendor_android_store_url: normalizeUrl(
+            versionControl?.vendor?.androidStoreUrl,
+          ),
+          vendor_ios_store_url: normalizeUrl(
+            versionControl?.vendor?.iosStoreUrl,
+          ),
+          vendor_release_note: normalizeNote(
+            versionControl?.vendor?.releaseNote,
+          ),
+          delivery_android_store_url: normalizeUrl(
+            versionControl?.delivery?.androidStoreUrl,
+          ),
+          delivery_ios_store_url: normalizeUrl(
+            versionControl?.delivery?.iosStoreUrl,
+          ),
+          delivery_release_note: normalizeNote(
+            versionControl?.delivery?.releaseNote,
+          ),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" },
@@ -2767,7 +2884,7 @@ export async function updateAppSettings(settings) {
     const { data: savedRow, error: verifyError } = await supabase
       .from("chawp_app_settings")
       .select(
-        "service_fee, delivery_fee, service_fee_mode, service_fee_percentage, pay_after_delivery_enabled",
+        "service_fee, delivery_fee, service_fee_mode, service_fee_percentage, pay_after_delivery_enabled, chawp_min_android_version, chawp_min_ios_version, chawp_android_store_url, chawp_ios_store_url, chawp_release_note, vendor_min_android_version, vendor_min_ios_version, vendor_android_store_url, vendor_ios_store_url, vendor_release_note, delivery_min_android_version, delivery_min_ios_version, delivery_android_store_url, delivery_ios_store_url, delivery_release_note",
       )
       .eq("id", 1)
       .maybeSingle();
@@ -2785,6 +2902,43 @@ export async function updateAppSettings(settings) {
       serviceFeeMode: serviceFeeMode,
       serviceFeePercentage: normalizedServiceFeePercentage,
       payAfterDeliveryEnabled: payAfterDeliveryEnabled,
+      versionControl: {
+        chawp: {
+          androidMinVersion: normalizeVersion(
+            versionControl?.chawp?.androidMinVersion,
+          ),
+          iosMinVersion: normalizeVersion(versionControl?.chawp?.iosMinVersion),
+          androidStoreUrl: normalizeUrl(versionControl?.chawp?.androidStoreUrl),
+          iosStoreUrl: normalizeUrl(versionControl?.chawp?.iosStoreUrl),
+          releaseNote: normalizeNote(versionControl?.chawp?.releaseNote),
+        },
+        vendor: {
+          androidMinVersion: normalizeVersion(
+            versionControl?.vendor?.androidMinVersion,
+          ),
+          iosMinVersion: normalizeVersion(
+            versionControl?.vendor?.iosMinVersion,
+          ),
+          androidStoreUrl: normalizeUrl(
+            versionControl?.vendor?.androidStoreUrl,
+          ),
+          iosStoreUrl: normalizeUrl(versionControl?.vendor?.iosStoreUrl),
+          releaseNote: normalizeNote(versionControl?.vendor?.releaseNote),
+        },
+        delivery: {
+          androidMinVersion: normalizeVersion(
+            versionControl?.delivery?.androidMinVersion,
+          ),
+          iosMinVersion: normalizeVersion(
+            versionControl?.delivery?.iosMinVersion,
+          ),
+          androidStoreUrl: normalizeUrl(
+            versionControl?.delivery?.androidStoreUrl,
+          ),
+          iosStoreUrl: normalizeUrl(versionControl?.delivery?.iosStoreUrl),
+          releaseNote: normalizeNote(versionControl?.delivery?.releaseNote),
+        },
+      },
     };
   } catch (error) {
     console.error("Error updating app settings:", error);
