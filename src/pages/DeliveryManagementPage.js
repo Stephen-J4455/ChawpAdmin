@@ -16,6 +16,7 @@ import { colors, spacing, radii } from "../theme";
 import { useNotification } from "../contexts/NotificationContext";
 import {
   fetchAllDeliveryPersonnel,
+  createDeliveryPersonnel,
   fetchDeliveryEarnings,
   createDeliveryPayout,
   updateDeliveryEarningStatus,
@@ -58,6 +59,17 @@ export default function DeliveryManagementPage() {
   const [contactMessage, setContactMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [contactMethod, setContactMethod] = useState("sms"); // 'sms' or 'call'
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [creatingPersonnel, setCreatingPersonnel] = useState(false);
+  const [newPersonnelData, setNewPersonnelData] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    password: "",
+    vehicle_type: "motorcycle",
+    vehicle_registration: "",
+    vehicle_color: "",
+  });
 
   useEffect(() => {
     loadPersonnel();
@@ -399,6 +411,53 @@ export default function DeliveryManagementPage() {
     }
   };
 
+  const handleOpenAddModal = () => {
+    setNewPersonnelData({
+      full_name: "",
+      email: "",
+      phone: "",
+      password: "",
+      vehicle_type: "motorcycle",
+      vehicle_registration: "",
+      vehicle_color: "",
+    });
+    setAddModalVisible(true);
+  };
+
+  const handleCreatePersonnel = async () => {
+    if (!newPersonnelData.email.trim() || !newPersonnelData.password.trim()) {
+      showError("Missing Fields", "Email and password are required");
+      return;
+    }
+
+    if (newPersonnelData.password.trim().length < 6) {
+      showError("Invalid Password", "Password must be at least 6 characters");
+      return;
+    }
+
+    setCreatingPersonnel(true);
+    const result = await createDeliveryPersonnel({
+      email: newPersonnelData.email.trim().toLowerCase(),
+      password: newPersonnelData.password.trim(),
+      full_name: newPersonnelData.full_name.trim(),
+      phone: newPersonnelData.phone.trim(),
+      vehicle_type: newPersonnelData.vehicle_type,
+      vehicle_registration: newPersonnelData.vehicle_registration.trim(),
+      vehicle_color: newPersonnelData.vehicle_color.trim(),
+      is_available: false,
+      is_verified: false,
+    });
+    setCreatingPersonnel(false);
+
+    if (result.success) {
+      setAddModalVisible(false);
+      await loadPersonnel();
+      showSuccess("Success", "Delivery personnel created successfully");
+    } else {
+      showError("Error", result.error || "Failed to create delivery personnel");
+    }
+  };
+
   const getEarningStatusColor = (status) => {
     switch (status) {
       case "paid":
@@ -447,6 +506,9 @@ export default function DeliveryManagementPage() {
         <Text style={styles.headerTitle}>
           Delivery Personnel ({personnel.length})
         </Text>
+        <TouchableOpacity style={styles.addButton} onPress={handleOpenAddModal}>
+          <Text style={styles.addButtonText}>+ Add Delivery</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -522,6 +584,180 @@ export default function DeliveryManagementPage() {
           </View>
         )}
       </ScrollView>
+
+      <Modal
+        visible={addModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setAddModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.addModalContent}>
+            <Text style={styles.modalTitle}>Add Delivery Personnel</Text>
+
+            <ScrollView
+              style={styles.addModalBody}
+              contentContainerStyle={styles.addModalBodyContent}
+            >
+              <View style={styles.formSection}>
+                <Text style={styles.inputLabel}>Full Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="John Doe"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newPersonnelData.full_name}
+                  onChangeText={(text) =>
+                    setNewPersonnelData((prev) => ({
+                      ...prev,
+                      full_name: text,
+                    }))
+                  }
+                />
+              </View>
+
+              <View style={styles.formSection}>
+                <Text style={styles.inputLabel}>Email *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="delivery@example.com"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={newPersonnelData.email}
+                  onChangeText={(text) =>
+                    setNewPersonnelData((prev) => ({
+                      ...prev,
+                      email: text,
+                    }))
+                  }
+                />
+              </View>
+
+              <View style={styles.formSection}>
+                <Text style={styles.inputLabel}>Phone</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="+233..."
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="phone-pad"
+                  value={newPersonnelData.phone}
+                  onChangeText={(text) =>
+                    setNewPersonnelData((prev) => ({
+                      ...prev,
+                      phone: text,
+                    }))
+                  }
+                />
+              </View>
+
+              <View style={styles.formSection}>
+                <Text style={styles.inputLabel}>Password *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Minimum 6 characters"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry
+                  value={newPersonnelData.password}
+                  onChangeText={(text) =>
+                    setNewPersonnelData((prev) => ({
+                      ...prev,
+                      password: text,
+                    }))
+                  }
+                />
+              </View>
+
+              <View style={styles.formSection}>
+                <Text style={styles.inputLabel}>Vehicle Type</Text>
+                <View style={styles.typeButtons}>
+                  {["motorcycle", "car", "bicycle"].map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.typeButton,
+                        newPersonnelData.vehicle_type === type &&
+                          styles.typeButtonActive,
+                      ]}
+                      onPress={() =>
+                        setNewPersonnelData((prev) => ({
+                          ...prev,
+                          vehicle_type: type,
+                        }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.typeButtonText,
+                          newPersonnelData.vehicle_type === type &&
+                            styles.typeButtonTextActive,
+                        ]}
+                      >
+                        {type}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.formSection}>
+                <Text style={styles.inputLabel}>Vehicle Registration</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="GW-1234-24"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newPersonnelData.vehicle_registration}
+                  onChangeText={(text) =>
+                    setNewPersonnelData((prev) => ({
+                      ...prev,
+                      vehicle_registration: text,
+                    }))
+                  }
+                />
+              </View>
+
+              <View style={styles.formSection}>
+                <Text style={styles.inputLabel}>Vehicle Color</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Black"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newPersonnelData.vehicle_color}
+                  onChangeText={(text) =>
+                    setNewPersonnelData((prev) => ({
+                      ...prev,
+                      vehicle_color: text,
+                    }))
+                  }
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelModalButton}
+                onPress={() => setAddModalVisible(false)}
+                disabled={creatingPersonnel}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.createButton,
+                  creatingPersonnel && styles.sendButtonDisabled,
+                ]}
+                onPress={handleCreatePersonnel}
+                disabled={creatingPersonnel}
+              >
+                {creatingPersonnel ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={styles.createButtonText}>Create</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Person Detail Modal */}
       <Modal
@@ -1403,6 +1639,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: spacing.lg,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
@@ -1412,6 +1651,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
     color: colors.textPrimary,
+  },
+  addButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+  },
+  addButtonText: {
+    color: colors.white,
+    fontWeight: "600",
+    fontSize: 13,
   },
   scrollView: {
     flex: 1,
@@ -1521,6 +1771,20 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radii.xxl,
     padding: spacing.xl,
     marginTop: 60,
+  },
+  addModalContent: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    padding: spacing.xl,
+    maxHeight: "90%",
+    marginTop: 80,
+  },
+  addModalBody: {
+    maxHeight: 460,
+  },
+  addModalBodyContent: {
+    paddingBottom: spacing.md,
   },
   modalTitle: {
     fontSize: 24,

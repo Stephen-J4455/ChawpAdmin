@@ -64,7 +64,10 @@ export default function NotificationsPage() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContentContainer}
+    >
       <View style={styles.header}>
         <Ionicons
           name="notifications-outline"
@@ -206,8 +209,6 @@ export default function NotificationsPage() {
           </View>
         </View>
       )}
-
-      <View style={{ height: spacing.xl }} />
     </ScrollView>
   );
 }
@@ -216,6 +217,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  scrollContentContainer: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl + spacing.xxxl + spacing.xxxl + spacing.xxxl,
   },
   header: {
     padding: spacing.xl,

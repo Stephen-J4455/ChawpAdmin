@@ -845,7 +845,8 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxxl + spacing.xxxl + spacing.xxxl + spacing.xxxl,
     gap: spacing.md,
   },
   advertCard: {

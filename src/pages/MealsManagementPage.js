@@ -496,6 +496,7 @@ export default function MealsManagementPage() {
 
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContentContainer}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -929,6 +930,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContentContainer: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl + spacing.xxxl + spacing.xxxl + spacing.xxxl,
   },
   mealCard: {
     backgroundColor: colors.card,

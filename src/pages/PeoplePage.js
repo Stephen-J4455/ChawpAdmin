@@ -26,7 +26,6 @@ export default function PeoplePage() {
 
   return (
     <View style={styles.container}>
-      {/* Tab Header */}
       <View style={styles.tabHeader}>
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -51,7 +50,6 @@ export default function PeoplePage() {
         })}
       </View>
 
-      {/* Tab Content */}
       <View style={styles.content}>{renderTabContent()}</View>
     </View>
   );
@@ -67,6 +65,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    paddingTop: spacing.xxxl + spacing.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.md,

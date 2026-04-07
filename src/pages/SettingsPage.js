@@ -747,6 +747,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
+    paddingBottom: spacing.xxxl + spacing.xxxl + spacing.xxxl + spacing.xxxl,
     paddingTop: Platform.OS === "android" ? spacing.xl : spacing.lg,
   },
   header: {
@@ -955,6 +956,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     flexDirection: "row",
     alignItems: "flex-start",
+    marginBottom: spacing.md,
   },
   infoIcon: {
     marginRight: spacing.md,
