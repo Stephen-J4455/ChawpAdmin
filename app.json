@@ -16,11 +16,6 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "notification": {
-      "icon": "./assets/chawp.png",
-      "color": "#FF6B35",
-      "androidMode": "default"
-    },
     "plugins": [
       "expo-system-ui",
       [
