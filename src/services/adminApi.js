@@ -2690,11 +2690,23 @@ export async function fetchAppSettings() {
     const { data, error } = await supabase
       .from("chawp_app_settings")
       .select(
-        "service_fee, delivery_fee, service_fee_mode, service_fee_percentage",
+        "service_fee, delivery_fee, service_fee_mode, service_fee_percentage, pay_after_delivery_enabled",
       )
-      .single();
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
     if (error) throw error;
+
+    if (!data) {
+      return {
+        serviceFee: 6,
+        deliveryFee: 5,
+        serviceFeeMode: "flat",
+        serviceFeePercentage: 0,
+        payAfterDeliveryEnabled: false,
+      };
+    }
 
     return {
       serviceFee: parseFloat(data.service_fee) || 6,
@@ -2702,6 +2714,7 @@ export async function fetchAppSettings() {
       serviceFeeMode:
         data.service_fee_mode === "percentage" ? "percentage" : "flat",
       serviceFeePercentage: parseFloat(data.service_fee_percentage) || 0,
+      payAfterDeliveryEnabled: Boolean(data.pay_after_delivery_enabled),
     };
   } catch (error) {
     console.error("Error fetching app settings:", error);
@@ -2711,6 +2724,7 @@ export async function fetchAppSettings() {
       deliveryFee: 5,
       serviceFeeMode: "flat",
       serviceFeePercentage: 0,
+      payAfterDeliveryEnabled: false,
     };
   }
 }
@@ -2724,49 +2738,43 @@ export async function updateAppSettings(settings) {
     const parsedServiceFeePercentage = parseFloat(
       settings.serviceFeePercentage,
     );
+    const payAfterDeliveryEnabled = Boolean(settings.payAfterDeliveryEnabled);
+    const normalizedServiceFeePercentage =
+      Number.isFinite(parsedServiceFeePercentage) &&
+      parsedServiceFeePercentage >= 0
+        ? parsedServiceFeePercentage
+        : 0;
 
-    // First, check if the row exists using maybeSingle to avoid error on no rows
-    const { data: existingData, error: checkError } = await supabase
+    // Use an upsert so this cannot silently no-op when id=1 is missing.
+    const { error: upsertError } = await supabase
       .from("chawp_app_settings")
-      .select("id")
-      .eq("id", 1)
-      .maybeSingle();
-
-    if (checkError) throw checkError;
-
-    if (!existingData) {
-      // Row doesn't exist, insert it
-      const { error } = await supabase.from("chawp_app_settings").insert({
-        id: 1,
-        service_fee: parsedServiceFee,
-        delivery_fee: parsedDeliveryFee,
-        service_fee_mode: serviceFeeMode,
-        service_fee_percentage:
-          Number.isFinite(parsedServiceFeePercentage) &&
-          parsedServiceFeePercentage >= 0
-            ? parsedServiceFeePercentage
-            : 0,
-      });
-
-      if (error) throw error;
-    } else {
-      // Row exists, update it
-      const { error } = await supabase
-        .from("chawp_app_settings")
-        .update({
+      .upsert(
+        {
+          id: 1,
           service_fee: parsedServiceFee,
           delivery_fee: parsedDeliveryFee,
           service_fee_mode: serviceFeeMode,
-          service_fee_percentage:
-            Number.isFinite(parsedServiceFeePercentage) &&
-            parsedServiceFeePercentage >= 0
-              ? parsedServiceFeePercentage
-              : 0,
+          service_fee_percentage: normalizedServiceFeePercentage,
+          pay_after_delivery_enabled: payAfterDeliveryEnabled,
           updated_at: new Date().toISOString(),
-        })
-        .eq("id", 1);
+        },
+        { onConflict: "id" },
+      );
 
-      if (error) throw error;
+    if (upsertError) throw upsertError;
+
+    // Verify persisted values to avoid false-positive success.
+    const { data: savedRow, error: verifyError } = await supabase
+      .from("chawp_app_settings")
+      .select(
+        "service_fee, delivery_fee, service_fee_mode, service_fee_percentage, pay_after_delivery_enabled",
+      )
+      .eq("id", 1)
+      .maybeSingle();
+
+    if (verifyError) throw verifyError;
+    if (!savedRow) {
+      throw new Error("Settings update could not be verified");
     }
 
     // Return the values we set (we know they were saved since there was no error)
@@ -2775,11 +2783,8 @@ export async function updateAppSettings(settings) {
       serviceFee: parsedServiceFee,
       deliveryFee: parsedDeliveryFee,
       serviceFeeMode: serviceFeeMode,
-      serviceFeePercentage:
-        Number.isFinite(parsedServiceFeePercentage) &&
-        parsedServiceFeePercentage >= 0
-          ? parsedServiceFeePercentage
-          : 0,
+      serviceFeePercentage: normalizedServiceFeePercentage,
+      payAfterDeliveryEnabled: payAfterDeliveryEnabled,
     };
   } catch (error) {
     console.error("Error updating app settings:", error);

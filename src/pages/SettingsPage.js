@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  Switch,
   ActivityIndicator,
   Alert,
   Platform,
@@ -21,6 +22,7 @@ export default function SettingsPage() {
   const [serviceFeeMode, setServiceFeeMode] = useState("flat");
   const [serviceFeePercentage, setServiceFeePercentage] = useState("0");
   const [deliveryFee, setDeliveryFee] = useState("5");
+  const [payAfterDeliveryEnabled, setPayAfterDeliveryEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -38,6 +40,7 @@ export default function SettingsPage() {
       setDeliveryFee(String(settings.deliveryFee));
       setServiceFeeMode(settings.serviceFeeMode || "flat");
       setServiceFeePercentage(String(settings.serviceFeePercentage || 0));
+      setPayAfterDeliveryEnabled(Boolean(settings.payAfterDeliveryEnabled));
     } catch (err) {
       setError(err.message || "Failed to load settings");
       console.error("Error loading settings:", err);
@@ -86,6 +89,7 @@ export default function SettingsPage() {
         serviceFeeMode,
         serviceFeePercentage:
           serviceFeeMode === "percentage" ? serviceFeePercentageNum : 0,
+        payAfterDeliveryEnabled,
       });
 
       Alert.alert("Success", "Settings updated successfully");
@@ -155,6 +159,35 @@ export default function SettingsPage() {
       {/* Settings Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Fees Configuration</Text>
+
+        {/* Pay After Delivery */}
+        <View style={styles.settingItem}>
+          <View style={styles.settingHeader}>
+            <Ionicons
+              name="card-outline"
+              size={20}
+              color={colors.primary}
+              style={styles.settingIcon}
+            />
+            <View style={styles.settingLabelContainer}>
+              <Text style={styles.settingLabel}>Pay After Delivery</Text>
+              <Text style={styles.settingDescription}>
+                When enabled, customers can place orders without paying upfront.
+              </Text>
+            </View>
+
+            <Switch
+              value={payAfterDeliveryEnabled}
+              onValueChange={setPayAfterDeliveryEnabled}
+              disabled={saving}
+              trackColor={{
+                false: colors.border,
+                true: colors.primary,
+              }}
+              thumbColor={colors.card}
+            />
+          </View>
+        </View>
 
         {/* Service Fee */}
         <View style={styles.settingItem}>
@@ -359,6 +392,19 @@ export default function SettingsPage() {
         <Text style={styles.infoText}>
           These fees will be applied to all new orders. Existing orders will not
           be affected.
+        </Text>
+      </View>
+
+      <View style={styles.infoBox}>
+        <Ionicons
+          name="information-circle"
+          size={20}
+          color={colors.primary}
+          style={styles.infoIcon}
+        />
+        <Text style={styles.infoText}>
+          Pay After Delivery affects checkout behavior for new orders when
+          enabled.
         </Text>
       </View>
     </ScrollView>
