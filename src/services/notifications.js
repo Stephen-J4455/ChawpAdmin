@@ -104,10 +104,14 @@ export async function registerForPushNotifications(userId) {
 
     console.log("[Admin Notifications] Permission granted, getting token...");
     try {
-      // Get FCM token (works for standalone apps)
-      token = (await Notifications.getDevicePushTokenAsync()).data;
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ||
+        Constants.easConfig?.projectId ||
+        "f6bd2190-4d5f-4232-b412-bf4728e04172";
+
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
       console.log(
-        "[Admin Notifications] FCM Push Token received:",
+        "[Admin Notifications] Expo Push Token received:",
         token ? token.substring(0, 50) + "..." : "NULL",
       );
 
@@ -128,7 +132,30 @@ export async function registerForPushNotifications(userId) {
         );
       }
     } catch (error) {
-      console.error("[Admin Notifications] Error getting push token:", error);
+      console.error(
+        "[Admin Notifications] Error getting Expo push token:",
+        error,
+      );
+      try {
+        token = (await Notifications.getDevicePushTokenAsync()).data;
+        console.log(
+          "[Admin Notifications] Native Push Token fallback received:",
+          token ? token.substring(0, 50) + "..." : "NULL",
+        );
+
+        if (userId && token) {
+          const saveResult = await savePushToken(token, userId);
+          console.log(
+            "[Admin Notifications] Fallback token save result:",
+            saveResult ? "SUCCESS" : "FAILED",
+          );
+        }
+      } catch (fallbackError) {
+        console.error(
+          "[Admin Notifications] Error getting native fallback token:",
+          fallbackError,
+        );
+      }
     }
   } else {
     console.log("[Admin Notifications] Not a physical device, skipping");

@@ -29,7 +29,7 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 35,
+            "compileSdkVersion": 36,
             "targetSdkVersion": 34,
             "buildToolsVersion": "35.0.0"
           }
@@ -39,14 +39,15 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sj.chawpadmin"
+      "bundleIdentifier": "com.jtrlabs.chawpadmin",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/chawp.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.stephen_j.ChawpAdmin",
+      "package": "com.stephenj.chawpadmin",
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.INTERNET",
@@ -60,7 +61,9 @@
       "favicon": "./assets/chawp.png"
     },
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "f6bd2190-4d5f-4232-b412-bf4728e04172"
+      }
     }
   }
 }
